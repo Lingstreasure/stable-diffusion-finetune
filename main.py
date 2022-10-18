@@ -1,4 +1,5 @@
 import argparse, os, sys, datetime, glob, importlib, csv
+sys.path.append(os.getcwd())
 import numpy as np
 import time
 import torch
@@ -592,12 +593,12 @@ if __name__ == "__main__":
     #           params:
     #               key: value
 
-    now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    now = (datetime.datetime.now() + datetime.timedelta(hours=8)).strftime("%Y-%m-%dT%H-%M-%S")
 
     # add cwd for convenience and to make classes in this file available when
     # running as `python main.py`
     # (in particular `main.DataModuleFromConfig`)
-    sys.path.append(os.getcwd())
+    # sys.path.append(os.getcwd())
 
     parser = get_parser()
     parser = Trainer.add_argparse_args(parser)
@@ -669,10 +670,14 @@ if __name__ == "__main__":
         # model
         model = instantiate_from_config(config.model)
         model.cpu()
+        print("Model build!!!!!!!!!!!!!!")
 
         if not opt.finetune_from == "":
             rank_zero_print(f"Attempting to load state from {opt.finetune_from}")
-            old_state = torch.load(opt.finetune_from, map_location="cpu")
+            print(os.getcwd())
+            finetune_from_path = os.path.join(os.getcwd(), str(opt.finetune_from))
+            assert os.path.isfile(finetune_from_path)
+            old_state = torch.load(finetune_from_path, map_location="cpu")
             if "state_dict" in old_state:
                 rank_zero_print(f"Found nested key 'state_dict' in checkpoint, loading this instead")
                 old_state = old_state["state_dict"]
@@ -846,6 +851,7 @@ if __name__ == "__main__":
         data.prepare_data()
         data.setup()
         rank_zero_print("#### Data #####")
+        print("Data build!!!!!!!!!!!!!!")
         try:
             for k in data.datasets:
                 rank_zero_print(f"{k}, {data.datasets[k].__class__.__name__}, {len(data.datasets[k])}")
@@ -909,7 +915,6 @@ if __name__ == "__main__":
         if MULTINODE_HACKS:
             import requests
             import datetime
-            import os
             import socket
             device = os.environ.get("CUDA_VISIBLE_DEVICES", "?")
             hostname = socket.gethostname()

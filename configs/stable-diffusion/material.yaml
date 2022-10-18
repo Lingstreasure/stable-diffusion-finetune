@@ -50,7 +50,7 @@ model:
         ddconfig:
           double_z: true
           z_channels: 4
-          resolution: 128
+          resolution: 256
           in_channels: 3
           out_ch: 3
           ch: 128
@@ -72,31 +72,29 @@ model:
 data:
   target: main.DataModuleFromConfig
   params:
-    batch_size: 4
+    batch_size: 1
     num_workers: 4
     num_val_workers: 0 # Avoid a weird val dataloader issue
     train:
-      target: ldm.data.simple.hf_dataset
+      target: ldm.data.simple.Material
       params:
-        name: lambdalabs/pokemon-blip-captions
+        name: Material
         image_transforms:
-        - target: torchvision.transforms.Resize
-          params:
-            size: 128
-            interpolation: 3
-        - target: torchvision.transforms.RandomCrop
-          params:
-            size: 128
+        # - target: torchvision.transforms.Resize
+        #   params:
+        #     size: 512
+        #     interpolation: 3
+        # - target: torchvision.transforms.RandomCrop
+        #   params:
+        #     size: 512
+        - target: torchvision.transforms.RandomVerticalFlip
         - target: torchvision.transforms.RandomHorizontalFlip
+        mode: train
     validation:
-      target: ldm.data.simple.TextOnly
+      target: ldm.data.simple.Material
       params:
-        captions:
-        - "A pokemon with green eyes, large wings, and a hat"
-        - "A cute bunny rabbit"
-        - "Yoda"
-        - "An epic landscape photo of a mountain"
-        output_size: 128
+        mode: test
+        output_size: 512
         n_gpus: 4 # small hack to sure we see all our samples
 
 

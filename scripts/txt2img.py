@@ -1,4 +1,5 @@
 import argparse, os, sys, glob
+sys.path.append(os.getcwd())
 import torch
 import numpy as np
 from omegaconf import OmegaConf
@@ -165,13 +166,13 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="logs/f8-kl-clip-encoder-256x256-run1/configs/2022-06-01T22-11-40-project.yaml",
+        default="configs/stable-diffusion/v1-inference.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="logs/f8-kl-clip-encoder-256x256-run1/checkpoints/last.ckpt",
+        default="models/ldm/stable-diffusion-v1/model.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
