@@ -1,6 +1,6 @@
 python main.py \
     -t \
-    --base configs/stable-diffusion/pokemon.yaml \
+    --base configs/stable-diffusion/material.yaml \
     --gpus 0,1,2,3 \
     --scale_lr False \
     --num_nodes 1 \

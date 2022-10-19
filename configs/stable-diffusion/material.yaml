@@ -1,5 +1,5 @@
 model:
-  base_learning_rate: 1.0e-04
+  base_learning_rate: 1.0e-05
   target: ldm.models.diffusion.ddpm.LatentDiffusion
   params:
     linear_start: 0.00085
@@ -73,12 +73,13 @@ data:
   target: main.DataModuleFromConfig
   params:
     batch_size: 1
-    num_workers: 4
+    num_workers: 12
     num_val_workers: 0 # Avoid a weird val dataloader issue
     train:
       target: ldm.data.simple.Material
       params:
-        name: Material
+        data_dir: /root/hz/DataSet/mat
+        mode: train
         image_transforms:
         # - target: torchvision.transforms.Resize
         #   params:
@@ -89,13 +90,11 @@ data:
         #     size: 512
         - target: torchvision.transforms.RandomVerticalFlip
         - target: torchvision.transforms.RandomHorizontalFlip
-        mode: train
     validation:
       target: ldm.data.simple.Material
       params:
+        data_dir: /root/hz/DataSet/mat
         mode: test
-        output_size: 512
-        n_gpus: 4 # small hack to sure we see all our samples
 
 
 lightning:

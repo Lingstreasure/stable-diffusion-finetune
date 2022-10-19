@@ -1,3 +1,4 @@
+from cgi import test
 from curses.ascii import isdigit
 from genericpath import isdir
 from tokenize import ContStr
@@ -142,6 +143,7 @@ class Material(Dataset):
         self._tform = self._set_transforms(image_transforms)
         self._data = self._process()
         self._dataset_length = len(self._data)
+        print("Data Num : {} for {}".format(self._dataset_length, mode))
     
     def _process(self) -> list:
         samples_names = os.listdir(self._data_dir)
@@ -160,9 +162,12 @@ class Material(Dataset):
             
             # image
             image_path = os.path.join(self._data_dir, name, "render_o.png")
-            assert os.path.isfile(image_path), image_path
+            if not os.path.isfile(image_path):
+                continue
             image = Image.open(image_path)  # PIL.Image
             image.convert("RGB")
+            if self._mode == "test":
+                image = np.zeros(np.array(image).shape, dtype=np.array(image).dtype)
 
             data.append([text, image])
         # data = data[:-20] if self._mode == "train" else data[-20:]
@@ -171,7 +176,7 @@ class Material(Dataset):
     def _set_transforms(self, img_transforms: list = []) -> transforms:
         img_transforms = [instantiate_from_config(tt) for tt in img_transforms]
         img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0)
-                            transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c'))])  # (0, 1.0)->(-1.0, 1.0)
+                               transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c'))])  # (0, 1.0)->(-1.0, 1.0)
         img_transforms = transforms.Compose(img_transforms)
         return img_transforms
     
@@ -184,12 +189,12 @@ class Material(Dataset):
     def __getitem__(self, idx: int) -> dict:
         text, image = self._data[idx]
         image = self._im_process(image)
-        return {"text": text, "image": image}
+        return {"txt": text, "image": image}
     
     
 if __name__ == "__main__":
-    dataset = Material("/root/hz/DataSet/material", "test")
+    dataset = Material("/root/hz/DataSet/mat", "test")
     for i in range(len(dataset)):
-        print(dataset[i]["text"], ' ', type(dataset[i]["image"]), ' ', dataset[i]["image"].shape)
-        assert i < 10
+        print(dataset[i]["txt"], ' ', type(dataset[i]["image"]), ' ', dataset[i]["image"])
+        assert i == 0
         
