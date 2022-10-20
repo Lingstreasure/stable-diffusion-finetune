@@ -1,4 +1,5 @@
 from cgi import test
+from curses import endwin
 from curses.ascii import isdigit
 from genericpath import isdir
 from tokenize import ContStr
@@ -141,11 +142,12 @@ class Material(Dataset):
         self._data_dir = os.path.join(data_dir, mode)
         self._mode = mode
         self._tform = self._set_transforms(image_transforms)
-        self._data = self._process()
-        self._dataset_length = len(self._data)
+        self._data = self._preprocess()
+        self._dataset_length:int = len(self._data)
+        assert self._dataset_length > 0
         print("Data Num : {} for {}".format(self._dataset_length, mode))
     
-    def _process(self) -> list:
+    def _preprocess(self) -> list:
         samples_names = os.listdir(self._data_dir)
         assert len(samples_names) > 0
         data = []
@@ -158,19 +160,18 @@ class Material(Dataset):
                 if not isdigit(ch):
                     core_key += ch
             str_checker = core_key.lower()
-            text = "A texture map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
+            text = "A normal map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
             
             # image
-            image_path = os.path.join(self._data_dir, name, "render_o.png")
+            image_path = os.path.join(self._data_dir, name, keys[0] + "_1K_NormalGL.jpg")  
             if not os.path.isfile(image_path):
                 continue
             image = Image.open(image_path)  # PIL.Image
             image.convert("RGB")
-            if self._mode == "test":
-                image = np.zeros(np.array(image).shape, dtype=np.array(image).dtype)
+            # if self._mode == "test":
+            #     image = np.zeros(np.array(image).shape, dtype=np.array(image).dtype)
 
             data.append([text, image])
-        # data = data[:-20] if self._mode == "train" else data[-20:]
         return data
     
     def _set_transforms(self, img_transforms: list = []) -> transforms:
@@ -180,7 +181,7 @@ class Material(Dataset):
         img_transforms = transforms.Compose(img_transforms)
         return img_transforms
     
-    def _im_process(self, image: Image) -> Image:
+    def _img_process(self, image: Image) -> Image:
         return self._tform(image)
     
     def __len__(self) -> int:
@@ -188,7 +189,7 @@ class Material(Dataset):
     
     def __getitem__(self, idx: int) -> dict:
         text, image = self._data[idx]
-        image = self._im_process(image)
+        image = self._img_process(image)
         return {"txt": text, "image": image}
     
     

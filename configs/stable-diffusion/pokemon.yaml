@@ -86,6 +86,7 @@ data:
             interpolation: 3
         - target: torchvision.transforms.RandomCrop
           params:
+            
             size: 128
         - target: torchvision.transforms.RandomHorizontalFlip
     validation:

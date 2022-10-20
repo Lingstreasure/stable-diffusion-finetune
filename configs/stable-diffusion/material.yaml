@@ -88,6 +88,10 @@ data:
         # - target: torchvision.transforms.RandomCrop
         #   params:
         #     size: 512
+        - target: torchvision.transforms.RandomResizedCrop
+          params:
+            size: 512
+            scale: [0.25, 1.0]
         - target: torchvision.transforms.RandomVerticalFlip
         - target: torchvision.transforms.RandomHorizontalFlip
     validation:
@@ -110,7 +114,7 @@ lightning:
     image_logger:
       target: main.ImageLogger
       params:
-        batch_frequency: 2000
+        batch_frequency: 340
         max_images: 4
         increase_log_steps: False
         log_first_step: True
