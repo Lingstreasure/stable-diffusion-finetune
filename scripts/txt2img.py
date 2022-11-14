@@ -1,6 +1,7 @@
 import argparse, os, sys, glob
 sys.path.append(os.getcwd())
 import torch
+import cv2
 import numpy as np
 from omegaconf import OmegaConf
 from PIL import Image
@@ -242,16 +243,35 @@ def main():
                             prompts = list(prompts)
                         c = model.get_learned_conditioning(prompts)
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-                        samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
-                                                         conditioning=c,
-                                                         batch_size=opt.n_samples,
-                                                         shape=shape,
-                                                         verbose=False,
-                                                         unconditional_guidance_scale=opt.scale,
-                                                         unconditional_conditioning=uc,
-                                                         eta=opt.ddim_eta,
-                                                         dynamic_threshold=opt.dyn,
-                                                         x_T=start_code)
+                        samples_ddim, intermediates = sampler.sample(S=opt.ddim_steps,
+                                                                    conditioning=c,
+                                                                    batch_size=opt.n_samples,
+                                                                    shape=shape,
+                                                                    verbose=False,
+                                                                    log_every_t=5,
+                                                                    unconditional_guidance_scale=opt.scale,
+                                                                    unconditional_conditioning=uc,
+                                                                    eta=opt.ddim_eta,
+                                                                    dynamic_threshold=opt.dyn,
+                                                                    x_T=start_code)
+
+                        ### visualize the latent space feature map
+                        feature_maps = rearrange(samples_ddim, 'b (c n) h w -> (b c) n h w', n=1)  # b c h w -> (b c) 1 h w
+                        min_value = (feature_maps.min(dim=-1, keepdim=True).values).min(dim=-2, keepdim=True).values
+                        max_value = (feature_maps.max(dim=-1, keepdim=True).values).max(dim=-2, keepdim=True).values
+                        feature_maps = (feature_maps - min_value) / (max_value - min_value)
+                        feature_maps = make_grid(feature_maps, normalize=False, nrow=samples_ddim.shape[1], padding=1, pad_value=1.0)  # 1 (b h) (c w)
+                        feature_maps = feature_maps.cpu().numpy().transpose(1, 2, 0)  # (b h) (c w) 3
+                        # feature_maps = np.mean(feature_maps, axis=-1, keepdims=True)  # (b h) (c w) 1
+                        feature_maps = (feature_maps * 255.0).astype(np.uint8)
+                        # print(feature_maps.shape, feature_maps.dtype)
+                        feature_maps = np.repeat(feature_maps, 4, axis=0)  # (b c) -> 4(b c)
+                        feature_maps = np.repeat(feature_maps, 4, axis=1)  # w -> 4w
+                        feature_maps = cv2.applyColorMap(feature_maps,cv2.COLORMAP_JET)
+                        if not opt.skip_save:
+                            cv2.imwrite(os.path.join(sample_path, f"{base_count:05}_features.png"), feature_maps)
+                            
+                            
 
                         x_samples_ddim = model.decode_first_stage(samples_ddim)
                         x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
@@ -261,9 +281,28 @@ def main():
                                 x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(x_sample.astype(np.uint8)).save(
                                     os.path.join(sample_path, f"{base_count:05}.png"))
-                                base_count += 1
+                                # base_count += 1
                         all_samples.append(x_samples_ddim)
-
+                        
+                        ### intermediates x
+                        x_intermediates = intermediates['x_inter']
+                        x_inters = []
+                        for i in range(len(x_intermediates)):
+                            x_inter = x_intermediates[i]
+                            x_inter = model.decode_first_stage(x_inter)
+                            x_inter = torch.clamp((x_inter + 1.0) / 2.0, min=0.0, max=1.0)
+                            x_inter = x_inter.cpu().permute(0, 2, 3, 1).numpy()
+                            x_inters.append(x_inter)
+                        x_checked_inters = np.array(x_inters)
+                        x_checked_inters_torch = torch.from_numpy(x_checked_inters).permute(1, 0, 4, 2, 3)  # b n c h w
+                        all_x_inters = rearrange(x_checked_inters_torch, 'b n c h w -> (b n) c h w')
+                        if not opt.skip_save:
+                            all_x_inters = make_grid(all_x_inters, nrow=len(x_intermediates), padding=4)  # grid - b, c, h, (w, n) c
+                            all_x_inters = 255. * rearrange(all_x_inters.cpu().numpy(), 'c h w -> h w c')
+                            img_inters = Image.fromarray(all_x_inters.astype(np.uint8))
+                            img_inters.save(os.path.join(sample_path, f"{base_count:05}_inters.png"))           
+                        base_count += 1
+                        
                 if not opt.skip_grid:
                     # additionally, save as grid
                     grid = torch.stack(all_samples, 0)
