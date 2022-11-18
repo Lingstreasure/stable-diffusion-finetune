@@ -17,6 +17,7 @@ from contextlib import contextmanager, nullcontext
 from ldm.util import instantiate_from_config
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
+from ldm.models.diffusion.dpm_solver import DPMSolverSampler
 
 
 def chunk(it, size):
@@ -24,13 +25,13 @@ def chunk(it, size):
     return iter(lambda: tuple(islice(it, size)), ())
 
 
-def load_model_from_config(config, ckpt, verbose=False):
+def load_model_from_config(config, ckpt, model_type="diffusion", verbose=False):
     print(f"Loading model from {ckpt}")
     pl_sd = torch.load(ckpt, map_location="cpu")
     if "global_step" in pl_sd:
         print(f"Global Step: {pl_sd['global_step']}")
     sd = pl_sd["state_dict"]
-    model = instantiate_from_config(config.model)
+    model = instantiate_from_config(config.get(model_type))
     m, u = model.load_state_dict(sd, strict=False)
     if len(m) > 0 and verbose:
         print("missing keys:")
@@ -86,6 +87,11 @@ def main():
         "--plms",
         action='store_true',
         help="use plms sampling",
+    )
+    parser.add_argument(
+        "--dpm_solver",
+        action='store_true',
+        help="use dpm_solver sampling",
     )
     parser.add_argument(
         "--fixed_code",
@@ -168,10 +174,22 @@ def main():
         "--config",
         type=str,
         default="configs/stable-diffusion/v1-inference.yaml",
-        help="path to config which constructs model",
+        help="path to diffusion config which constructs model",
     )
     parser.add_argument(
-        "--ckpt",
+        "--diff_ckpt",
+        type=str,
+        default="models/ldm/stable-diffusion-v1/model.ckpt",
+        help="path to checkpoint of model",
+    )
+    parser.add_argument(
+        "--albedo_ckpt",
+        type=str,
+        default="models/ldm/stable-diffusion-v1/model.ckpt",
+        help="path to checkpoint of model",
+    )
+    parser.add_argument(
+        "--normal_ckpt",
         type=str,
         default="models/ldm/stable-diffusion-v1/model.ckpt",
         help="path to checkpoint of model",
@@ -193,80 +211,23 @@ def main():
     seed_everything(opt.seed)
 
     config = OmegaConf.load(f"{opt.config}")
-    model = load_model_from_config(config, f"{opt.ckpt}")
+    diff_model = load_model_from_config(config, f"{opt.diff_ckpt}", "diffusion")
+    albedo_model = load_model_from_config(config, f"{opt.albedo_ckpt}", "albedo")
+    normal_model = load_model_from_config(config, f"{opt.normal_ckpt}", "normal")
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    model = model.to(device)
-    
-    ## see the SimpleDecoder params number
-    # from ldm.modules.diffusionmodules.model import SimpleDecoder
-    # test_in = torch.randn((4, 512, 64, 64))
-    # simpleDecoder = SimpleDecoder(512, 3)
-    # simpleDecoder.eval()
-    # model_params = sum(p.numel() for p in simpleDecoder.parameters())
-    # print("sampleDecoder params: {}M".format(model_params // 1e6))
-    # # test_out = simpleDecoder(test_in)
-    # # print("test_out.shape: ", test_out.shape)
-    # assert 0
-    
-    ### visualize AE out
-    # dataset = instantiate_from_config(config.data.params.train)  # data[idx]: {'txt': str, 'image': tensor}
-    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.n_samples, num_workers=12, shuffle=False)
-    # save_path = "/root/hz/Code/stable-diffusion-finetune/scripts/AE_out" 
-    # for idx, data in enumerate(dataloader):
-    #     if idx < 10:
-    #         continue
-    #     data['image'] = data['image'].to(device)
-    #     # print(data['txt'])
-    #     print(data['image'].shape)
-    #     out1, posterior1 = model.first_stage_model(data['image'])
-    #     assert 0
-    #     out2, posterior2 = model.first_stage_model(data['image'], False)
-    #     out1 = torch.clamp((out1 + 1.0) / 2.0, min=0.0, max=1.0).permute(0, 2, 3, 1)  # b c h w -> b h w c
-    #     out2 = torch.clamp((out2 + 1.0) / 2.0, min=0.0, max=1.0).permute(0, 2 ,3, 1)  # b c h w -> b h w c
-    #     for i, img1 in enumerate(out1):
-    #         img1 = img1.cpu().numpy() * 255.0
-    #         Image.fromarray(img1.astype(np.uint8)).save(
-    #                                 os.path.join(save_path, f"{i:05}_ae1.png"))
-    #     for i, img2 in enumerate(out2):
-    #         img2 = img2.cpu().numpy() * 255.0
-    #         Image.fromarray(img2.astype(np.uint8)).save(
-    #                                 os.path.join(save_path, f"{i:05}_ae2.png"))
-    #     assert 0    
-    
-    
-    
-    ### visualize model structure 
-    # model_params = sum(p.numel() for p in model.parameters())
-    # model_trainble_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # print("model total params: {}M, trainable params: {}M".format(model_params // 1e6, model_trainble_params // 1e6))
-    # model_sub1 = model.first_stage_model
-    # model_sub1_decoder = model.first_stage_model.decoder
-    # model_sub2 = model.cond_stage_model
-    # model_sub1_params = sum(p.numel() for p in model_sub1.parameters())
-    # model_sub1_decoder_params = sum(p.numel() for p in model_sub1_decoder.parameters())
-    # model_sub1_trainable_params = sum(p.numel() for p in model_sub1.parameters() if p.requires_grad)
-    # model_sub2_params = sum(p.numel() for p in model_sub2.parameters())
-    # model_sub2_trainable_params = sum(p.numel() for p in model_sub2.parameters() if p.requires_grad)
-    # print("model sub1 params: {}M, trainalbe params: {}M".format(model_sub1_params // 1e6, model_sub1_trainable_params // 1e6))
-    # print("model sub2 params: {}M, trainalbe params: {}M".format(model_sub2_params // 1e6, model_sub2_trainable_params // 1e6))
-    # print("model sub1 decoder params; {}M".format(model_sub1_decoder_params // 1e6))
-    # assert 0
-
-    ### export the model structure (not yet)
-    # torch.onnx.export(
-    #     model,
-    #     opt.prompt,
-    #     'model.onnx',
-    #     export_params=True,
-    #     opset_version=8,
-    # )
-
+    diff_model = diff_model.to(device)
+    albedo_model = albedo_model.to(device)
+    normal_model = normal_model.to(device)
 
     if opt.plms:
-        sampler = PLMSSampler(model)
+        sampler = PLMSSampler(diff_model)
+    elif opt.dpm_solver:
+        sampler = DPMSolverSampler(diff_model)
+        print("")
     else:
-        sampler = DDIMSampler(model)
+        sampler = DDIMSampler(diff_model)
+    
 
     os.makedirs(opt.outdir, exist_ok=True)
     outpath = opt.outdir
@@ -296,17 +257,17 @@ def main():
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     with torch.no_grad():
         with precision_scope("cuda"):
-            with model.ema_scope():
+            with diff_model.ema_scope():
                 tic = time.time()
                 all_samples = list()
                 for n in trange(opt.n_iter, desc="Sampling"):
                     for prompts in tqdm(data, desc="data"):
                         uc = None
                         if opt.scale != 1.0:
-                            uc = model.get_learned_conditioning(batch_size * [""])
+                            uc = diff_model.get_learned_conditioning(batch_size * [""])
                         if isinstance(prompts, tuple):
                             prompts = list(prompts)
-                        c = model.get_learned_conditioning(prompts)
+                        c = diff_model.get_learned_conditioning(prompts)
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                         samples_ddim, intermediates = sampler.sample(S=opt.ddim_steps,
                                                                     conditioning=c,
@@ -321,52 +282,68 @@ def main():
                                                                     x_T=start_code)
                         
                         ### visualize the latent space feature map
-                        feature_maps = rearrange(samples_ddim, 'b (c n) h w -> (b c) n h w', n=1)  # b c h w -> (b c) 1 h w
-                        min_value = (feature_maps.min(dim=-1, keepdim=True).values).min(dim=-2, keepdim=True).values
-                        max_value = (feature_maps.max(dim=-1, keepdim=True).values).max(dim=-2, keepdim=True).values
-                        feature_maps = (feature_maps - min_value) / (max_value - min_value)
-                        feature_maps = make_grid(feature_maps, normalize=False, nrow=samples_ddim.shape[1], padding=1, pad_value=1.0)  # 1 (b h) (c w)
-                        feature_maps = feature_maps.cpu().numpy().transpose(1, 2, 0)  # (b h) (c w) 3
-                        # feature_maps = np.mean(feature_maps, axis=-1, keepdims=True)  # (b h) (c w) 1
-                        feature_maps = (feature_maps * 255.0).astype(np.uint8)
-                        # print(feature_maps.shape, feature_maps.dtype)
-                        feature_maps = np.repeat(feature_maps, 4, axis=0)  # (b c) -> 4(b c)
-                        feature_maps = np.repeat(feature_maps, 4, axis=1)  # w -> 4w
-                        feature_maps = cv2.applyColorMap(feature_maps,cv2.COLORMAP_JET)
-                        if not opt.skip_save:
-                            cv2.imwrite(os.path.join(sample_path, f"{base_count:05}_features.png"), feature_maps)
-                            
-                            
+                        # feature_maps = rearrange(samples_ddim, 'b (c n) h w -> (b c) n h w', n=1)  # b c h w -> (b c) 1 h w
+                        # min_value = (feature_maps.min(dim=-1, keepdim=True).values).min(dim=-2, keepdim=True).values
+                        # max_value = (feature_maps.max(dim=-1, keepdim=True).values).max(dim=-2, keepdim=True).values
+                        # feature_maps = (feature_maps - min_value) / (max_value - min_value)
+                        # feature_maps = make_grid(feature_maps, normalize=False, nrow=samples_ddim.shape[1], padding=1, pad_value=1.0)  # 1 (b h) (c w)
+                        # feature_maps = feature_maps.cpu().numpy().transpose(1, 2, 0)  # (b h) (c w) 3
+                        # # feature_maps = np.mean(feature_maps, axis=-1, keepdims=True)  # (b h) (c w) 1
+                        # feature_maps = (feature_maps * 255.0).astype(np.uint8)
+                        # # print(feature_maps.shape, feature_maps.dtype)
+                        # feature_maps = np.repeat(feature_maps, 4, axis=0)  # (b c) -> 4(b c)
+                        # feature_maps = np.repeat(feature_maps, 4, axis=1)  # w -> 4w
+                        # feature_maps = cv2.applyColorMap(feature_maps,cv2.COLORMAP_JET)
+                        # if not opt.skip_save:
+                        #     cv2.imwrite(os.path.join(sample_path, f"{base_count:05}_features.png"), feature_maps)
 
-                        x_samples_ddim = model.decode_first_stage(samples_ddim)
+
+                        x_samples_ddim = diff_model.decode_first_stage(samples_ddim)
+                        albedos = albedo_model.decode_for_inference(samples_ddim)
+                        normals = normal_model.decode_for_inference(samples_ddim)
                         x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
-
+                        albedos = torch.clamp((albedos + 1.0) / 2.0, min=0.0, max=1.0)
+                        normals = torch.clamp((normals + 1.0) / 2.0, min=0.0, max=1.0)
+                        
                         if not opt.skip_save:
                             for x_sample in x_samples_ddim:
                                 x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(x_sample.astype(np.uint8)).save(
                                     os.path.join(sample_path, f"{base_count:05}.png"))
+                                base_count += 1
+                            for albedo in albedos:
+                                albedo = 255. * rearrange(albedo.cpu().numpy(), 'c h w -> h w c')
+                                Image.fromarray(albedo.astype(np.uint8)).save(
+                                    os.path.join(sample_path, f"{base_count:05}_albedo.png"))
+                                base_count += 1
+                            for normal in normals:
+                                normal = 255. * rearrange(normal.cpu().numpy(), 'c h w -> h w c')
+                                Image.fromarray(normal.astype(np.uint8)).save(
+                                    os.path.join(sample_path, f"{base_count:05}_normal.png"))
+                                base_count += 1
                                 # base_count += 1
                         all_samples.append(x_samples_ddim)
+                        all_samples.append(albedos)
+                        all_samples.append(normals)
                         
                         ### intermediates x
-                        x_intermediates = intermediates['x_inter']
-                        x_inters = []
-                        for i in range(len(x_intermediates)):
-                            x_inter = x_intermediates[i]
-                            x_inter = model.decode_first_stage(x_inter)
-                            x_inter = torch.clamp((x_inter + 1.0) / 2.0, min=0.0, max=1.0)
-                            x_inter = x_inter.cpu().permute(0, 2, 3, 1).numpy()
-                            x_inters.append(x_inter)
-                        x_checked_inters = np.array(x_inters)
-                        x_checked_inters_torch = torch.from_numpy(x_checked_inters).permute(1, 0, 4, 2, 3)  # b n c h w
-                        all_x_inters = rearrange(x_checked_inters_torch, 'b n c h w -> (b n) c h w')
-                        if not opt.skip_save:
-                            all_x_inters = make_grid(all_x_inters, nrow=len(x_intermediates), padding=4)  # grid - b, c, h, (w, n) c
-                            all_x_inters = 255. * rearrange(all_x_inters.cpu().numpy(), 'c h w -> h w c')
-                            img_inters = Image.fromarray(all_x_inters.astype(np.uint8))
-                            img_inters.save(os.path.join(sample_path, f"{base_count:05}_inters.png"))           
-                        base_count += 1
+                        # x_intermediates = intermediates['x_inter']
+                        # x_inters = []
+                        # for i in range(len(x_intermediates)):
+                        #     x_inter = x_intermediates[i]
+                        #     x_inter = diff_model.decode_first_stage(x_inter)
+                        #     x_inter = torch.clamp((x_inter + 1.0) / 2.0, min=0.0, max=1.0)
+                        #     x_inter = x_inter.cpu().permute(0, 2, 3, 1).numpy()
+                        #     x_inters.append(x_inter)
+                        # x_checked_inters = np.array(x_inters)
+                        # x_checked_inters_torch = torch.from_numpy(x_checked_inters).permute(1, 0, 4, 2, 3)  # b n c h w
+                        # all_x_inters = rearrange(x_checked_inters_torch, 'b n c h w -> (b n) c h w')
+                        # if not opt.skip_save:
+                        #     all_x_inters = make_grid(all_x_inters, nrow=len(x_intermediates), padding=4)  # grid - b, c, h, (w, n) c
+                        #     all_x_inters = 255. * rearrange(all_x_inters.cpu().numpy(), 'c h w -> h w c')
+                        #     img_inters = Image.fromarray(all_x_inters.astype(np.uint8))
+                        #     img_inters.save(os.path.join(sample_path, f"{base_count:05}_inters.png"))           
+                        # base_count += 1
                         
                 if not opt.skip_grid:
                     # additionally, save as grid

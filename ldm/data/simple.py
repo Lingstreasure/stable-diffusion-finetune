@@ -17,7 +17,7 @@ from einops import rearrange
 from transformers import Data2VecTextConfig
 from datasets import load_dataset
 import sys, os
-# sys.path.append(os.getcwd())
+sys.path.append(os.getcwd())
 from ldm import data
 from ldm.util import instantiate_from_config
 
@@ -128,7 +128,7 @@ class TextOnly(Dataset):
         return [x.strip('\n') for x in captions]
     
 
-class Material(Dataset):
+class Text2Material(Dataset):
     """ The Dataset of text-texture pair
         Args - data_dir : path of data
              - mode : mode of the dataset, e.g. 'train'/'test'
@@ -138,7 +138,7 @@ class Material(Dataset):
                  data_dir: str, 
                  mode: str = "train",
                  image_transforms: list = []):
-        super(Material).__init__()
+        super(Text2Material).__init__()
         self._data_dir = os.path.join(data_dir, mode)
         self._mode = mode
         self._tform = self._set_transforms(image_transforms)
@@ -160,14 +160,15 @@ class Material(Dataset):
                 if not isdigit(ch):
                     core_key += ch
             str_checker = core_key.lower()
-            text = "A normal map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
+            text = "A texture map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
             
             # image
-            image_path = os.path.join(self._data_dir, name, keys[0] + "_1K_NormalGL.jpg")  
+            # image_path = os.path.join(self._data_dir, name, keys[0] + "_1K_NormalGL.jpg")  
+            image_path = os.path.join(self._data_dir, name, 'render_o.png')
             if not os.path.isfile(image_path):
                 continue
             image = Image.open(image_path)  # PIL.Image
-            image.convert("RGB")
+            image.convert("RGB")  # h w c
             # if self._mode == "test":
             #     image = np.zeros(np.array(image).shape, dtype=np.array(image).dtype)
 
@@ -176,8 +177,10 @@ class Material(Dataset):
     
     def _set_transforms(self, img_transforms: list = []) -> transforms:
         img_transforms = [instantiate_from_config(tt) for tt in img_transforms]
-        img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0)
-                               transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c'))])  # (0, 1.0)->(-1.0, 1.0)
+        img_transforms = []
+        img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0), h w c -> c h w
+                            #    transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c')), used for stable-diffusion
+                               transforms.Lambda(lambda x: x * 2. - 1.)])  # (0, 1.0)->(-1.0, 1.0)
         img_transforms = transforms.Compose(img_transforms)
         return img_transforms
     
@@ -193,9 +196,81 @@ class Material(Dataset):
         return {"txt": text, "image": image}
     
     
+class PBRMap(Dataset):
+    def __init__(self, 
+                 data_dir: str, 
+                 mode: str = "train",
+                 pbr_type: str = "albedo",
+                 image_transforms: list = []):
+        """The Dataset of pbr map for training decoder of VAE
+
+        Args:
+            data_dir (str): path of data
+            mode (str, optional): mode of the dataset, e.g. "train"/"test". Defaults to "train".
+            pbr_type (str, optional): the tyep of pbr map, e.g. "albedo"/"normal". Defaults to "albedo".
+            image_transforms (list, optional): the transforms preprocessed on the image. Defaults to [].
+        """             
+        super().__init__()
+        self._data_dir = os.path.join(data_dir, mode)
+        self._mode = mode
+        self.pbr_type = pbr_type
+        self._tform = self._set_transforms(image_transforms)
+        self._data = self._preprocess()
+        self._dataset_length:int = len(self._data)
+        assert self._dataset_length > 0
+        # print("Data Num : {} for {}".format(self._dataset_length, mode))
+    
+    def _preprocess(self) -> list:
+        samples_names = os.listdir(self._data_dir)
+        assert len(samples_names) > 0
+        data = []
+        gt_postfix = "normal.png" if self.pbr_type == "normal" else "albedo.png"
+        for i, name in enumerate(samples_names):
+            ## text
+            row_text = name
+            keys = row_text.split('_')
+            ## images 
+            gt_path = os.path.join(self._data_dir, name, "samll_" + gt_postfix)
+            input_path = os.path.join(self._data_dir, name, 'render_o.png')
+            if not os.path.isfile(input_path) or not os.path.isfile(gt_path):
+                continue
+            input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
+            input = np.array(input)
+            
+            gt = Image.open(gt_path).convert("RGB")
+            # gt = gt.resize(input.shape[:-1])  # 1024 -> 512 already processed
+            gt = np.array(gt)
+            
+            data.append([input, gt])
+        return data
+    
+    def _set_transforms(self, img_transforms: list = []) -> transforms:
+        img_transforms = [instantiate_from_config(tt) for tt in img_transforms]
+        img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0), h w c -> c h w
+                            #    transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c')), used for stable-diffusion
+                               transforms.Lambda(lambda x: x * 2. - 1.)])  # (0, 1.0)->(-1.0, 1.0)
+        img_transforms = transforms.Compose(img_transforms)
+        return img_transforms
+    
+    def _img_process(self, image: Image) -> Image:
+        return self._tform(image)
+    
+    def __len__(self) -> int:
+        return self._dataset_length
+    
+    def __getitem__(self, idx: int) -> dict:
+        input, gt = self._data[idx]
+        # images = np.concatenate([input, gt], axis=-1)  # concat at channel dim
+        # images = self._img_process(images)
+        input = self._img_process(input)
+        gt = self._img_process(gt)
+        return {"input": input, "gt": gt}
+    
 if __name__ == "__main__":
-    dataset = Material("/root/hz/DataSet/mat", "test")
+    dataset = PBRMap("/root/hz/DataSet/mat", "train")
     for i in range(len(dataset)):
-        print(dataset[i]["txt"], ' ', type(dataset[i]["image"]), ' ', dataset[i]["image"])
-        assert i == 0
+        print(dataset[i]["input"].shape, ' ', dataset[i]["gt"].shape)
+        print(torch.min(dataset[i]["input"]), ' ', torch.max(dataset[i]["input"]))
+        print(torch.min(dataset[i]["gt"]), ' ', torch.max(dataset[i]["gt"]))
+        
         

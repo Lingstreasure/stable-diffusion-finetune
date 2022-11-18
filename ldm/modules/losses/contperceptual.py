@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from taming.modules.losses.vqperceptual import *  # TODO: taming dependency yes/no?
+from src.taming_transformers.taming.modules.losses.vqperceptual import *  # TODO: taming dependency yes/no?
 
 
 class LPIPSWithDiscriminator(nn.Module):
@@ -109,3 +109,24 @@ class LPIPSWithDiscriminator(nn.Module):
                    }
             return d_loss, log
 
+
+class PBRDecoderLoss(nn.Module):
+    def __init__(self, perceptual_weight=1.0):
+        """ The loss of PBR map decoder.(VAE-decoder)
+        """        
+        super().__init__()
+        self.perceptual_loss = LPIPS().eval()
+        self.perceptual_weight = perceptual_weight
+
+    def forward(self, inputs, reconstructions, split="train"):
+        rec_loss = torch.abs(inputs.contiguous() - reconstructions.contiguous()).mean()
+        p_loss = 0.0
+        if self.perceptual_weight > 0:
+            p_loss = self.perceptual_loss(inputs.contiguous(), reconstructions.contiguous()).mean() * self.perceptual_weight
+            
+        loss = rec_loss + p_loss
+
+        log = {"{}/total_loss".format(split): loss.clone().detach().mean(), 
+                "{}/per_loss".format(split): p_loss.detach().mean(),
+                "{}/rec_loss".format(split): rec_loss.detach().mean()}
+        return loss, log

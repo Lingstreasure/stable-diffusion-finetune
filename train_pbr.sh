@@ -1,0 +1,11 @@
+python train_pbr.py \
+    --train \
+    --name normal \
+    --postfix _v1 \
+    --base configs/stable-diffusion/pbr.yaml \
+    --gpus 0,1,2,3 \
+    --scale_lr False \
+    --num_nodes 1 \
+    --check_val_every_n_epoch 1 \
+    --auto_scale_batch_size True \
+    --finetune_from models/ldm/sd-v1-4.ckpt
