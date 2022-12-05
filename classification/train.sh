@@ -1,0 +1,20 @@
+python3 main.py --epochs 100 \
+    --batch_size 1 \
+    --num_worker 12 \
+    --seed 23 \
+    --lr 1e-5 \
+    --lr_decay_steps 10 \
+    --lr_decay_min_lr 1e-5 \
+    --data_dir "/root/hz/DataSet/dtd/images" \
+    --train_list_path "/root/hz/DataSet/dtd/labels/train_list.txt" \
+    --test_list_path "/root/hz/DataSet/dtd/labels/test_list.txt" \
+    --loss 'multi' \
+    --num_classes 47 \
+    --img_size 256 \
+    --weight_decay 1e-4 \
+    --log_name "resnet101" \
+    --depth 101 \
+    --cutmix "./logs/pretrained/resnet101_cutmix_pretrained.pth"
+    --accelerator 'gpu' \
+    --check_val_every_n_epoch 1 \
+    --devices 3 
