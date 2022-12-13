@@ -318,7 +318,7 @@ class SetupCallback(Callback):
 
 class ImageLogger(Callback):
     def __init__(self, batch_frequency, max_images, clamp=True, increase_log_steps=True,
-                 rescale=True, disabled=False, log_on_batch_idx=False, log_first_step=True,
+                 rescale=True, disabled=False, log_on_batch_idx=True, log_first_step=True,
                  log_images_kwargs=None, log_all_val=False):
         super().__init__()
         self.rescale = rescale
@@ -359,7 +359,7 @@ class ImageLogger(Callback):
             grid = grid.transpose(0, 1).transpose(1, 2).squeeze(-1)
             grid = grid.numpy()
             grid = (grid * 255).astype(np.uint8)
-            filename = "{}_gs-{:06}_e-{:06}_b-{:06}.png".format(
+            filename = "{}_gs-{:05}_e-{:03}_b-{:04}.png".format(
                 k,
                 global_step,
                 current_epoch,
@@ -374,7 +374,7 @@ class ImageLogger(Callback):
             should_log = True
         else:
             should_log = self.check_frequency(check_idx)
-        if (should_log and  (batch_idx % self.batch_freq == 0) and
+        if (should_log and  (batch_idx == self.batch_freq) and
                 hasattr(pl_module, "log_images") and
                 callable(pl_module.log_images) and
                 self.max_images > 0):

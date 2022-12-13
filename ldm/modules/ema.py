@@ -74,3 +74,6 @@ class LitEma(nn.Module):
         """
         for c_param, param in zip(self.collected_params, parameters):
             param.data.copy_(c_param.data)
+        
+        del self.collected_params
+        torch.cuda.empty_cache()

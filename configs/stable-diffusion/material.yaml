@@ -12,7 +12,7 @@ model:
     cond_stage_key: "txt"
     image_size: 64
     channels: 4
-    cond_stage_trainable: false   # Note: different from the one we trained before
+    cond_stage_trainable: False   # Note: different from the one we trained before
     conditioning_key: crossattn
     scale_factor: 0.18215
 
@@ -73,12 +73,12 @@ data:
   target: main.DataModuleFromConfig
   params:
     batch_size: 1
-    num_workers: 12
+    num_workers: 6
     num_val_workers: 0 # Avoid a weird val dataloader issue
     train:
       target: ldm.data.simple.Text2Material
       params:
-        data_dir: /root/hz/DataSet/mat
+        data_dir: /root/hz/DataSet/material
         mode: train
         image_transforms:
         # - target: torchvision.transforms.Resize
@@ -92,12 +92,12 @@ data:
         #   params:
         #     size: 512
         #     scale: [0.25, 1.0]
-        # - target: torchvision.transforms.RandomVerticalFlip
-        # - target: torchvision.transforms.RandomHorizontalFlip
+        - target: torchvision.transforms.RandomVerticalFlip
+        - target: torchvision.transforms.RandomHorizontalFlip
     validation:
       target: ldm.data.simple.Text2Material
       params:
-        data_dir: /root/hz/DataSet/mat
+        data_dir: /root/hz/DataSet/material
         mode: test
 
 
@@ -114,13 +114,14 @@ lightning:
     image_logger:
       target: main.ImageLogger
       params:
-        batch_frequency: 340
+        batch_frequency: 2
         max_images: 4
         increase_log_steps: False
         log_first_step: True
         log_all_val: True
+        log_on_batch_idx: True
         log_images_kwargs:
-          use_ema_scope: False
+          use_ema_scope: True
           inpaint: False
           plot_progressive_rows: False
           plot_diffusion_rows: False

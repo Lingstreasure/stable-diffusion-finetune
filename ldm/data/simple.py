@@ -15,7 +15,6 @@ from PIL import Image
 from torchvision import transforms
 from einops import rearrange
 from transformers import Data2VecTextConfig
-from datasets import load_dataset
 import sys, os
 sys.path.append(os.getcwd())
 from ldm import data
@@ -68,34 +67,6 @@ class FolderData(Dataset):
         im = im.convert("RGB")
         return self.tform(im)
 
-def hf_dataset(
-    name,
-    image_transforms=[],
-    image_column="image",
-    text_column="text",
-    split="train",
-    image_key="image",
-    caption_key='txt',
-    ):
-    """Make huggingface dataset with appropriate list of transforms applied
-    """
-    ds = load_dataset(name, split=split)
-    image_transforms = [instantiate_from_config(tt) for tt in image_transforms]
-    image_transforms.extend([transforms.ToTensor(), 
-                             transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c'))])
-    tform = transforms.Compose(image_transforms)
-
-    assert image_column in ds.column_names, f"Didn't find column {image_column} in {ds.column_names}"
-    assert text_column in ds.column_names, f"Didn't find column {text_column} in {ds.column_names}"
-
-    def pre_process(examples):
-        processed = {}
-        processed[image_key] = [tform(im) for im in examples[image_column]]
-        processed[caption_key] = examples[text_column]
-        return processed
-
-    ds.set_transform(pre_process)
-    return ds
 
 class TextOnly(Dataset):
     def __init__(self, captions, output_size, image_key="image", caption_key="txt", n_gpus=1):
@@ -152,18 +123,22 @@ class Text2Material(Dataset):
         assert len(samples_names) > 0
         data = []
         for name in samples_names:
-            # text
-            row_text = name
-            keys = row_text.split('_')
-            core_key = str()
-            for ch in keys[0]:
-                if not isdigit(ch):
-                    core_key += ch
-            str_checker = core_key.lower()
-            text = "A texture map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
-            
-            # image
-            # image_path = os.path.join(self._data_dir, name, keys[0] + "_1K_NormalGL.jpg")  
+            sample_dir = os.path.join(self._data_dir, name)
+            ## text
+            # row_text = name
+            # keys = row_text.split('_')
+            # core_key = str()
+            # for ch in keys[0]:
+            #     if not isdigit(ch):
+            #         core_key += ch
+            # str_checker = core_key.lower()
+            # text = "A texture map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
+            text_path = os.path.join(sample_dir, 'text.txt')
+            if not os.path.isfile(text_path):
+                continue
+            with open(text_path, 'r') as f:
+                text = f.read().strip()
+            ## image
             image_path = os.path.join(self._data_dir, name, 'render_o.png')
             if not os.path.isfile(image_path):
                 continue
@@ -177,7 +152,6 @@ class Text2Material(Dataset):
     
     def _set_transforms(self, img_transforms: list = []) -> transforms:
         img_transforms = [instantiate_from_config(tt) for tt in img_transforms]
-        img_transforms = []
         img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0), h w c -> c h w
                             #    transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c')), used for stable-diffusion
                                transforms.Lambda(lambda x: x * 2. - 1.)])  # (0, 1.0)->(-1.0, 1.0)

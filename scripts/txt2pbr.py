@@ -224,7 +224,6 @@ def main():
         sampler = PLMSSampler(diff_model)
     elif opt.dpm_solver:
         sampler = DPMSolverSampler(diff_model)
-        print("")
     else:
         sampler = DDIMSampler(diff_model)
     

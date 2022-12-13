@@ -17,6 +17,7 @@ from contextlib import contextmanager, nullcontext
 from ldm.util import instantiate_from_config
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
+from ldm.models.diffusion.dpm_solver import DPMSolverSampler
 
 
 def chunk(it, size):
@@ -265,6 +266,8 @@ def main():
 
     if opt.plms:
         sampler = PLMSSampler(model)
+    elif opt.dpm_solver:
+        sampler = DPMSolverSampler(model)
     else:
         sampler = DDIMSampler(model)
 

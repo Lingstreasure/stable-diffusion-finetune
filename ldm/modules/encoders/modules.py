@@ -6,7 +6,7 @@ import kornia
 
 from ldm.modules.x_transformer import Encoder, TransformerWrapper  # TODO: can we directly rely on lucidrains code and simply add this as a reuirement? --> test
 from ldm.util import default
-import clip
+from src import clip
 
 
 class AbstractEncoder(nn.Module):
