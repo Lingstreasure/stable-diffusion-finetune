@@ -89,6 +89,11 @@ def main():
         help="use plms sampling",
     )
     parser.add_argument(
+        "--dpm_solver",
+        action='store_true',
+        help="use dpm_solver sampling",
+    )
+    parser.add_argument(
         "--fixed_code",
         action='store_true',
         help="if enabled, uses the same starting code across all samples ",
@@ -184,6 +189,12 @@ def main():
         help="the seed (for reproducible sampling)",
     )
     parser.add_argument(
+        "--device_num",
+        type=int,
+        default=0,
+        help="the number of the device for sampling",
+    )
+    parser.add_argument(
         "--precision",
         type=str,
         help="evaluate at this precision",
@@ -196,7 +207,7 @@ def main():
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device(f"cuda:{opt.device_num}") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
     
     ## see the SimpleDecoder params number
@@ -298,7 +309,7 @@ def main():
 
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     with torch.no_grad():
-        with precision_scope("cuda"):
+        with precision_scope(f"cuda"):
             with model.ema_scope():
                 tic = time.time()
                 all_samples = list()
@@ -349,27 +360,27 @@ def main():
                                 x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(x_sample.astype(np.uint8)).save(
                                     os.path.join(sample_path, f"{base_count:05}.png"))
-                                # base_count += 1
+                                base_count += 1
                         all_samples.append(x_samples_ddim)
                         
                         ### intermediates x
-                        x_intermediates = intermediates['x_inter']
-                        x_inters = []
-                        for i in range(len(x_intermediates)):
-                            x_inter = x_intermediates[i]
-                            x_inter = model.decode_first_stage(x_inter)
-                            x_inter = torch.clamp((x_inter + 1.0) / 2.0, min=0.0, max=1.0)
-                            x_inter = x_inter.cpu().permute(0, 2, 3, 1).numpy()
-                            x_inters.append(x_inter)
-                        x_checked_inters = np.array(x_inters)
-                        x_checked_inters_torch = torch.from_numpy(x_checked_inters).permute(1, 0, 4, 2, 3)  # b n c h w
-                        all_x_inters = rearrange(x_checked_inters_torch, 'b n c h w -> (b n) c h w')
-                        if not opt.skip_save:
-                            all_x_inters = make_grid(all_x_inters, nrow=len(x_intermediates), padding=4)  # grid - b, c, h, (w, n) c
-                            all_x_inters = 255. * rearrange(all_x_inters.cpu().numpy(), 'c h w -> h w c')
-                            img_inters = Image.fromarray(all_x_inters.astype(np.uint8))
-                            img_inters.save(os.path.join(sample_path, f"{base_count:05}_inters.png"))           
-                        base_count += 1
+                        # x_intermediates = intermediates['x_inter']
+                        # x_inters = []
+                        # for i in range(len(x_intermediates)):
+                        #     x_inter = x_intermediates[i]
+                        #     x_inter = model.decode_first_stage(x_inter)
+                        #     x_inter = torch.clamp((x_inter + 1.0) / 2.0, min=0.0, max=1.0)
+                        #     x_inter = x_inter.cpu().permute(0, 2, 3, 1).numpy()
+                        #     x_inters.append(x_inter)
+                        # x_checked_inters = np.array(x_inters)
+                        # x_checked_inters_torch = torch.from_numpy(x_checked_inters).permute(1, 0, 4, 2, 3)  # b n c h w
+                        # all_x_inters = rearrange(x_checked_inters_torch, 'b n c h w -> (b n) c h w')
+                        # if not opt.skip_save:
+                        #     all_x_inters = make_grid(all_x_inters, nrow=len(x_intermediates), padding=4)  # grid - b, c, h, (w, n) c
+                        #     all_x_inters = 255. * rearrange(all_x_inters.cpu().numpy(), 'c h w -> h w c')
+                        #     img_inters = Image.fromarray(all_x_inters.astype(np.uint8))
+                        #     img_inters.save(os.path.join(sample_path, f"{base_count:05}_inters.png"))           
+                        # base_count += 1
                         
                 if not opt.skip_grid:
                     # additionally, save as grid
@@ -379,7 +390,7 @@ def main():
 
                     # to image
                     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                    Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, prompts[0] + '.png'))
+                    Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, prompts[0] + f'[seed-{opt.seed}].png'))
                     grid_count += 1
 
                 toc = time.time()
