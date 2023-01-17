@@ -1,8 +1,12 @@
 python scripts/txt2img.py \
-    --prompt "A texture map of black mosaic tile with white squares" \
-    --outdir "outputs/generated" \
-    --ckpt "logs/2022-10-19T14-00-44_material_v1/checkpoints/last.ckpt" \
+    --prompt "red fabric with grid pattern" \
+    --outdir "outputs/with_pattern_text" \
+    --ckpt "logs/2022-12-08T11-29-47_material_with_pattern/checkpoints/epoch=000048.ckpt" \
     --H 512 --W 512 \
     --n_samples 4 \
-    --ddim_steps 50 \
-    --config "configs/stable-diffusion/material.yaml"
+    --ddim_steps 25 \
+    --seed 42 \
+    --dpm_solver \
+    --config "configs/stable-diffusion/material.yaml" \
+    --scale 5.0 \
+    --device_num 3

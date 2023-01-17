@@ -40,7 +40,7 @@ def load_model_from_config(config, ckpt, verbose=False):
         print("unexpected keys:")
         print(u)
 
-    model.cuda()
+    # model.cuda()
     model.eval()
     return model
 
@@ -209,7 +209,8 @@ def main():
 
     device = torch.device(f"cuda:{opt.device_num}") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
-    
+    model.cond_stage_model.device = device
+
     ## see the SimpleDecoder params number
     # from ldm.modules.diffusionmodules.model import SimpleDecoder
     # test_in = torch.randn((4, 512, 64, 64))
@@ -309,7 +310,7 @@ def main():
 
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     with torch.no_grad():
-        with precision_scope(f"cuda"):
+        with precision_scope("cuda"):
             with model.ema_scope():
                 tic = time.time()
                 all_samples = list()
@@ -318,6 +319,7 @@ def main():
                         uc = None
                         if opt.scale != 1.0:
                             uc = model.get_learned_conditioning(batch_size * [""])
+
                         if isinstance(prompts, tuple):
                             prompts = list(prompts)
                         c = model.get_learned_conditioning(prompts)
@@ -390,7 +392,7 @@ def main():
 
                     # to image
                     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                    Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, prompts[0] + f'[seed-{opt.seed}].png'))
+                    Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'[scale-{opt.scale}]' + prompts[0] + f'[seed-{opt.seed}].png'))
                     grid_count += 1
 
                 toc = time.time()

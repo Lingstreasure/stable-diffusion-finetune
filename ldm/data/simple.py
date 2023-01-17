@@ -122,6 +122,7 @@ class Text2Material(Dataset):
         samples_names = os.listdir(self._data_dir)
         assert len(samples_names) > 0
         data = []
+        length = len(samples_names)
         for name in samples_names:
             sample_dir = os.path.join(self._data_dir, name)
             ## text
@@ -133,13 +134,13 @@ class Text2Material(Dataset):
             #         core_key += ch
             # str_checker = core_key.lower()
             # text = "A texture map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
-            text_path = os.path.join(sample_dir, 'text.txt')
+            text_path = os.path.join(sample_dir, 'text_wo_label.txt')
             if not os.path.isfile(text_path):
                 continue
             with open(text_path, 'r') as f:
                 text = f.read().strip()
             ## image
-            image_path = os.path.join(self._data_dir, name, 'render_o.png')
+            image_path = os.path.join(self._data_dir, name, 'render_small.png')
             if not os.path.isfile(image_path):
                 continue
             image = Image.open(image_path)  # PIL.Image
