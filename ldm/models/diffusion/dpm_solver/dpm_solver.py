@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import math
+from tqdm import tqdm
 
 
 class NoiseScheduleVP:
@@ -1089,7 +1090,8 @@ class DPM_Solver:
                     model_prev_list.append(self.model_fn(x, vec_t))
                     t_prev_list.append(vec_t)
                 # Compute the remaining values by `order`-th order multistep DPM-Solver.
-                for step in range(order, steps + 1):
+                iterator = tqdm(range(order, steps + 1), desc='DPM Sampler', total=steps - order + 1)
+                for step in iterator:
                     vec_t = timesteps[step].expand(x.shape[0])
                     if lower_order_final and steps < 15:
                         step_order = min(order, steps + 1 - step)
