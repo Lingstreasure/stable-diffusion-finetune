@@ -410,7 +410,7 @@ class ImageLogger(Callback):
             try:
                 self.log_steps.pop(0)
             except IndexError as e:
-                rank_zero_print(e)
+                # rank_zero_print(e)
                 pass
             return True
         return False
