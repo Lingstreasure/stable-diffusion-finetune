@@ -1,0 +1,12 @@
+python scripts/txt2img.py \
+    --prompt "a beautiful tigger on a top modern building" \
+    --outdir "outputs/wo_pattern_text" \
+    --ckpt "models/ldm/512-base-ema.ckpt" \
+    --H 512 --W 512 \
+    --n_samples 1 \
+    --ddim_steps 25 \
+    --seed 42 \
+    --dpm_solver \
+    --config "configs/stable-diffusion/v2-inference.yaml" \
+    --scale 5.0 \
+    --device_num 0 \
