@@ -468,7 +468,9 @@ class UNetModel(nn.Module):
         n_embed=None,                     # custom support for prediction of discrete ids into codebook of first stage vq model
         legacy=True,
         disable_self_attentions=None,
-        num_attention_blocks=None
+        num_attention_blocks=None,
+        disable_middle_self_attn=False,
+        use_linear_in_transformer=False,
     ):
         super().__init__()
         if use_spatial_transformer:
@@ -583,7 +585,8 @@ class UNetModel(nn.Module):
                                 use_new_attention_order=use_new_attention_order,
                             ) if not use_spatial_transformer else SpatialTransformer(
                                 ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim,
-                                disable_self_attn=disabled_sa
+                                disable_self_attn=disabled_sa, use_linear=use_linear_in_transformer,
+                                use_checkpoint=use_checkpoint
                             )
                         )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -638,7 +641,9 @@ class UNetModel(nn.Module):
                 num_head_channels=dim_head,
                 use_new_attention_order=use_new_attention_order,
             ) if not use_spatial_transformer else SpatialTransformer(  # always uses a self-attn
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim
+                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim, 
+                            disable_self_attn=disable_middle_self_attn, use_linear=use_linear_in_transformer,
+                            use_checkpoint=use_checkpoint
                         ),
             ResBlock(
                 ch,
@@ -691,7 +696,8 @@ class UNetModel(nn.Module):
                                 use_new_attention_order=use_new_attention_order,
                             ) if not use_spatial_transformer else SpatialTransformer(
                                 ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim,
-                                disable_self_attn=disabled_sa
+                                disable_self_attn=disabled_sa, use_linear=use_linear_in_transformer,
+                                use_checkpoint=use_checkpoint
                             )
                         )
                 if level and i == self.num_res_blocks[level]:
