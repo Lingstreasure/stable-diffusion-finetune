@@ -201,6 +201,12 @@ def main():
         help="the seed (for reproducible sampling)",
     )
     parser.add_argument(
+        "--device_num",
+        type=int,
+        default=0,
+        help="the number of the device for sampling",
+    )
+    parser.add_argument(
         "--precision",
         type=str,
         help="evaluate at this precision",
@@ -215,8 +221,9 @@ def main():
     albedo_model = load_model_from_config(config, f"{opt.albedo_ckpt}", "albedo")
     normal_model = load_model_from_config(config, f"{opt.normal_ckpt}", "normal")
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device(f"cuda:{opt.device_num}") if torch.cuda.is_available() else torch.device("cpu")
     diff_model = diff_model.to(device)
+    diff_model.cond_stage_model.device = device
     albedo_model = albedo_model.to(device)
     normal_model = normal_model.to(device)
 
@@ -352,7 +359,7 @@ def main():
 
                     # to image
                     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                    Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, prompts[0] + '.png'))
+                    Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'[scale-{opt.scale}]' + prompts[0] + f'[seed-{opt.seed}].png'))
                     grid_count += 1
 
                 toc = time.time()
