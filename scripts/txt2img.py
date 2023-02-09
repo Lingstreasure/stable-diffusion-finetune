@@ -222,30 +222,58 @@ def main():
     # # print("test_out.shape: ", test_out.shape)
     # assert 0
     
-    ### visualize AE out
-    # dataset = instantiate_from_config(config.data.params.train)  # data[idx]: {'txt': str, 'image': tensor}
-    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.n_samples, num_workers=12, shuffle=False)
-    # save_path = "/root/hz/Code/stable-diffusion-finetune/scripts/AE_out" 
-    # for idx, data in enumerate(dataloader):
-    #     if idx < 10:
-    #         continue
-    #     data['image'] = data['image'].to(device)
-    #     # print(data['txt'])
-    #     print(data['image'].shape)
-    #     out1, posterior1 = model.first_stage_model(data['image'])
-    #     assert 0
-    #     out2, posterior2 = model.first_stage_model(data['image'], False)
-    #     out1 = torch.clamp((out1 + 1.0) / 2.0, min=0.0, max=1.0).permute(0, 2, 3, 1)  # b c h w -> b h w c
-    #     out2 = torch.clamp((out2 + 1.0) / 2.0, min=0.0, max=1.0).permute(0, 2 ,3, 1)  # b c h w -> b h w c
-    #     for i, img1 in enumerate(out1):
-    #         img1 = img1.cpu().numpy() * 255.0
-    #         Image.fromarray(img1.astype(np.uint8)).save(
-    #                                 os.path.join(save_path, f"{i:05}_ae1.png"))
-    #     for i, img2 in enumerate(out2):
-    #         img2 = img2.cpu().numpy() * 255.0
-    #         Image.fromarray(img2.astype(np.uint8)).save(
-    #                                 os.path.join(save_path, f"{i:05}_ae2.png"))
-    #     assert 0    
+    ## visualize AE out and intermediate feature
+    from torchvision import transforms
+    _toTensor = transforms.ToTensor()
+    img_dir = "/home/d5/hz/DataSet/mat/feature_test"
+    img_list = []
+    names = os.listdir(img_dir)
+    for name in names:
+        elem_dir = os.path.join(img_dir, name)
+        elements = os.listdir(elem_dir)
+        for elem in elements:
+            if elem.split('.')[0].endswith('NormalDX'):
+                elem_path = os.path.join(elem_dir, elem)
+                img = Image.open(elem_path)  # PIL.Image
+                img.convert("RGB")  # h w c
+                img = img.resize((512, 512))
+                img = _toTensor(img)  # h w c -> c h w, (0, 255) -> (0, 1)
+                # render_img = Image.open(os.path.join(elem_dir, 'render_512.png'))
+                # render_img.convert("RGB")  # h w c
+                # render_img = _toTensor(render_img)
+                # img = torch.concat([render_img, img], dim=0)  # c h w -> 2c h w
+                img_list.append(img)
+            
+    # save_path = "/home/d5/hz/Code/stable-diffusion-finetune/scripts/AE_out" 
+    # for idx, in_img in enumerate(img_list):
+    #     # if idx > 15:
+    #     #     break
+    #     data = in_img.unsqueeze(dim=0) * 2.0 - 1 # c h w -> 1 c h w, (0, 1) -> (-1, 1)
+    #     out_img, posterior = model.first_stage_model(data.to(device))
+    #     out_img = torch.clamp((out_img + 1.0) / 2.0, min=0.0, max=1.0)  # (-1, 1) -> (0, 1)
+    #     in_img = in_img.unsqueeze(0).to(device)  # c h w -> 1 c h w
+    #     final_img = torch.concat([in_img, out_img], dim=0)  # -> 2 c h w
+    #     final_img = make_grid(final_img, nrow=2, padding=1, pad_value=1)  # c h (b w) 
+    #     final_img = (final_img.cpu().numpy().transpose(1, 2, 0) * 255.0).astype(np.uint8)
+    #     Image.fromarray(final_img).save(os.path.join(save_path, f"{idx}_ae.png"))
+        
+    #     feature = posterior.sample()
+    #     feature_maps = rearrange(feature, 'b (c n) h w -> (b c) n h w', n=1)  # b c h w -> (b c) 1 h w
+    #     min_value = (feature_maps.min(dim=-1, keepdim=True).values).min(dim=-2, keepdim=True).values
+    #     max_value = (feature_maps.max(dim=-1, keepdim=True).values).max(dim=-2, keepdim=True).values
+    #     feature_maps = (feature_maps - min_value) / (max_value - min_value)
+    #     feature_maps = make_grid(feature_maps, normalize=False, nrow=feature.shape[1], padding=1, pad_value=1.0)  # 1 (b h) (c w)
+    #     feature_maps = feature_maps.cpu().numpy().transpose(1, 2, 0)  # (b h) (c w) 3
+    #     # feature_maps = np.mean(feature_maps, axis=-1, keepdims=True)  # (b h) (c w) 1
+    #     feature_maps = (feature_maps * 255.0).astype(np.uint8)
+    #     # print(feature_maps.shape, feature_maps.dtype)
+    #     feature_maps = np.repeat(feature_maps, 4, axis=0)  # (b c) -> 4(b c)
+    #     feature_maps = np.repeat(feature_maps, 4, axis=1)  # w -> 4w
+    #     feature_maps = cv2.applyColorMap(feature_maps,cv2.COLORMAP_JET)
+    #     if not opt.skip_save:
+    #         cv2.imwrite(os.path.join(save_path, f"{idx}_features.png"), feature_maps)
+    #     print(f"finished {idx}")
+    # assert 0    
     
     
     
@@ -337,24 +365,26 @@ def main():
                                                                     x_T=start_code)
                         
                         ### visualize the latent space feature map
-                        feature_maps = rearrange(samples_ddim, 'b (c n) h w -> (b c) n h w', n=1)  # b c h w -> (b c) 1 h w
-                        min_value = (feature_maps.min(dim=-1, keepdim=True).values).min(dim=-2, keepdim=True).values
-                        max_value = (feature_maps.max(dim=-1, keepdim=True).values).max(dim=-2, keepdim=True).values
-                        feature_maps = (feature_maps - min_value) / (max_value - min_value)
-                        feature_maps = make_grid(feature_maps, normalize=False, nrow=samples_ddim.shape[1], padding=1, pad_value=1.0)  # 1 (b h) (c w)
-                        feature_maps = feature_maps.cpu().numpy().transpose(1, 2, 0)  # (b h) (c w) 3
-                        # feature_maps = np.mean(feature_maps, axis=-1, keepdims=True)  # (b h) (c w) 1
-                        feature_maps = (feature_maps * 255.0).astype(np.uint8)
-                        # print(feature_maps.shape, feature_maps.dtype)
-                        feature_maps = np.repeat(feature_maps, 4, axis=0)  # (b c) -> 4(b c)
-                        feature_maps = np.repeat(feature_maps, 4, axis=1)  # w -> 4w
-                        feature_maps = cv2.applyColorMap(feature_maps,cv2.COLORMAP_JET)
-                        if not opt.skip_save:
-                            cv2.imwrite(os.path.join(sample_path, f"{base_count:05}_features.png"), feature_maps)
+                        # feature_maps = rearrange(samples_ddim, 'b (c n) h w -> (b c) n h w', n=1)  # b c h w -> (b c) 1 h w
+                        # min_value = (feature_maps.min(dim=-1, keepdim=True).values).min(dim=-2, keepdim=True).values
+                        # max_value = (feature_maps.max(dim=-1, keepdim=True).values).max(dim=-2, keepdim=True).values
+                        # feature_maps = (feature_maps - min_value) / (max_value - min_value)
+                        # feature_maps = make_grid(feature_maps, normalize=False, nrow=samples_ddim.shape[1], padding=1, pad_value=1.0)  # 1 (b h) (c w)
+                        # feature_maps = feature_maps.cpu().numpy().transpose(1, 2, 0)  # (b h) (c w) 3
+                        # # feature_maps = np.mean(feature_maps, axis=-1, keepdims=True)  # (b h) (c w) 1
+                        # feature_maps = (feature_maps * 255.0).astype(np.uint8)
+                        # # print(feature_maps.shape, feature_maps.dtype)
+                        # feature_maps = np.repeat(feature_maps, 4, axis=0)  # (b c) -> 4(b c)
+                        # feature_maps = np.repeat(feature_maps, 4, axis=1)  # w -> 4w
+                        # feature_maps = cv2.applyColorMap(feature_maps,cv2.COLORMAP_JET)
+                        # if not opt.skip_save:
+                        #     cv2.imwrite(os.path.join(sample_path, f"{base_count:05}_features.png"), feature_maps)
                             
-                            
-
+                        samples_ddim = torch.concat([samples_ddim, samples_ddim], dim=-1)
+                        samples_ddim = torch.concat([samples_ddim, samples_ddim], dim=-2)
                         x_samples_ddim = model.decode_first_stage(samples_ddim)
+                        # x_samples_ddim = torch.concat([x_samples_ddim, x_samples_ddim], dim=-1)
+                        # x_samples_ddim = torch.concat([x_samples_ddim, x_samples_ddim], dim=-2)
                         x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
 
                         if not opt.skip_save:
