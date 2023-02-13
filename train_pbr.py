@@ -11,6 +11,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import random_split, DataLoader, Dataset, Subset
 from functools import partial
 from PIL import Image
+from einops import rearrange
 
 from pytorch_lightning import seed_everything
 from pytorch_lightning.trainer import Trainer
@@ -317,7 +318,7 @@ class SetupCallback(Callback):
 
 
 class ImageLogger(Callback):
-    def __init__(self, batch_frequency, max_images, clamp=True, increase_log_steps=True,
+    def __init__(self, batch_frequency, max_images, clamp=True, increase_log_steps=False,
                  rescale=True, disabled=False, log_on_batch_idx=False, log_first_step=True,
                  log_images_kwargs=None, log_all_val=False):
         super().__init__()
@@ -327,7 +328,7 @@ class ImageLogger(Callback):
         self.logger_log_images = {
             pl.loggers.TestTubeLogger: self._testtube,
         }
-        self.log_steps = [2 ** n for n in range(int(np.log2(self.batch_freq)) + 1)]
+        self.log_steps = [2 ** n for n in range(int(np.log2(1 if self.batch_freq < 1 else self.batch_freq)) + 1)]
         if not increase_log_steps:
             self.log_steps = [self.batch_freq]
         self.clamp = clamp
@@ -353,7 +354,7 @@ class ImageLogger(Callback):
                   global_step, current_epoch, batch_idx):
         root = os.path.join(save_dir, "images", split)
         for k in images:
-            grid = torchvision.utils.make_grid(images[k], nrow=4)
+            grid = torchvision.utils.make_grid(images[k], nrow=images[k].shape[0])
             if self.rescale:
                 grid = (grid + 1.0) / 2.0  # -1,1 -> 0,1; c,h,w
             grid = grid.permute(1, 2, 0).squeeze(-1)  # h w c
@@ -398,7 +399,11 @@ class ImageLogger(Callback):
 
             self.log_local(pl_module.logger.save_dir, split, images,
                            pl_module.global_step, pl_module.current_epoch, batch_idx)
-
+            # for k in images:
+            #     # if k == 0:
+            #     #     continue
+            #     images[k] = rearrange(images[k], 'b c h (n w) -> b c (n h) w', n = 2)
+            #     # print(images[k].shape)
             logger_log_images = self.logger_log_images.get(logger, lambda *args, **kwargs: None)
             logger_log_images(pl_module, images, pl_module.global_step, split)
 
@@ -411,7 +416,7 @@ class ImageLogger(Callback):
             try:
                 self.log_steps.pop(0)
             except IndexError as e:
-                rank_zero_print(e)
+                # rank_zero_print(e)
                 pass
             return True
         return False
@@ -813,7 +818,7 @@ if __name__ == "__main__":
         # configure learning rate
         bs, base_lr = config.data.params.batch_size, config.model.base_learning_rate
         if not cpu:
-            ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
+            ngpu = len(str(lightning_config.trainer.gpus).strip(",").split(','))
         else:
             ngpu = 1
         if 'accumulate_grad_batches' in lightning_config.trainer:
