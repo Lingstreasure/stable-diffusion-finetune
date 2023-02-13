@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
-
+import sys
+sys.path.append("/home/d5/hz/Code/diffmat/diffmat/core")
+from render import Renderer
 from taming.modules.losses.vqperceptual import *  # TODO: taming dependency yes/no?
 
 
@@ -111,22 +113,48 @@ class LPIPSWithDiscriminator(nn.Module):
 
 
 class PBRDecoderLoss(nn.Module):
-    def __init__(self, perceptual_weight=1.0):
+    def __init__(self, 
+                 random_perceptual_weight = 0, 
+                 perceptual_weight=0, 
+                 render_weight=0):
         """ The loss of PBR map decoder.(VAE-decoder)
         """        
         super().__init__()
-        self.perceptual_loss = LPIPS().eval()
+        if random_perceptual_weight > 0 or perceptual_weight > 0:
+            self.perceptual_loss = LPIPS().eval()
+        self.renderer = Renderer(normal_format='dx')
+        self.random_perceptual_weight = random_perceptual_weight
         self.perceptual_weight = perceptual_weight
+        self.render_weight = render_weight
 
-    def forward(self, inputs, reconstructions, split="train"):
-        rec_loss = torch.abs(inputs.contiguous() - reconstructions.contiguous()).mean()
-        p_loss = 0.0
+    def forward(self, gts, reconstructions, inputs, split="train"):
+        B, C, H, W = reconstructions.shape
+        rec_loss = torch.abs(gts.contiguous() - reconstructions.contiguous()).mean()
+        #p_loss = 0.0
         if self.perceptual_weight > 0:
-            p_loss = self.perceptual_loss(inputs.contiguous(), reconstructions.contiguous()).mean() * self.perceptual_weight
-            
-        loss = rec_loss + p_loss
+            p_loss = self.perceptual_loss(gts.contiguous(), reconstructions.contiguous()).mean() * self.perceptual_weight
+
+        if self.render_weight > 0:
+            if self.renderer.device != gts.device:
+                self.renderer.to(gts.device)
+            render_imgs = self.renderer.evaluate(*[(reconstructions[:, :3, ...] + 1.0) / 2.0, 
+                                                    (reconstructions[:, 3:6, ...] + 1.0) / 2.0, 
+                                                    (reconstructions[:, 6:7, ...] + 1.0) / 2.0, 
+                                                    (reconstructions[:, 7:, ...] + 1.0) / 2.0, 
+                                                    torch.ones((B, 1, H, W)).float().to(gts.device)])
+            render_loss = torch.abs((inputs * 2.0 - 1).contiguous() - render_imgs.contiguous()).mean() * self.render_weight
+        
+        if self.random_perceptual_weight > 0:
+            indexes = torch.randint(0, C, (3,))
+            random_p_loss = self.perceptual_loss(gts[:, indexes, ...].contiguous(), 
+                                                 reconstructions[:, indexes, ...].contiguous()).mean() * self.random_perceptual_weight
+
+        loss = rec_loss + random_p_loss# + render_loss #+ p_loss
 
         log = {"{}/total_loss".format(split): loss.clone().detach().mean(), 
-                "{}/per_loss".format(split): p_loss.detach().mean(),
-                "{}/rec_loss".format(split): rec_loss.detach().mean()}
+                "{}/rec_loss".format(split): rec_loss.detach().mean(), 
+                "{}/render_loss".format(split): render_loss.detach().mean(), 
+                "{}/random_per_loss".format(split): random_p_loss.detach().mean()}
+        # if self.perceptual_weight > 0:
+        #     log["{}/per_loss".format(split)] = p_loss.detach().mean()
         return loss, log

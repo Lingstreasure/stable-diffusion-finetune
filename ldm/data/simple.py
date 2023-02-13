@@ -139,8 +139,9 @@ class Text2Material(Dataset):
                 continue
             with open(text_path, 'r') as f:
                 text = f.read().strip()
+
             ## image
-            image_path = os.path.join(self._data_dir, name, 'render_small.png')
+            image_path = os.path.join(self._data_dir, name, 'render_512.png')
             if not os.path.isfile(image_path):
                 continue
             image = Image.open(image_path)  # PIL.Image
@@ -181,8 +182,8 @@ class PBRMap(Dataset):
 
         Args:
             data_dir (str): path of data
-            mode (str, optional): mode of the dataset, e.g. "train"/"test". Defaults to "train".
-            pbr_type (str, optional): the tyep of pbr map, e.g. "albedo"/"normal". Defaults to "albedo".
+            mode (str, optional): mode of the dataset, e.g. "train"/"test" or other. Defaults to "train".
+            pbr_type (str, optional): the tyep of pbr map, e.g. "albedo"/"normal" or other. Defaults to "albedo".
             image_transforms (list, optional): the transforms preprocessed on the image. Defaults to [].
         """             
         super().__init__()
@@ -197,24 +198,78 @@ class PBRMap(Dataset):
     
     def _preprocess(self) -> list:
         samples_names = os.listdir(self._data_dir)
+        samples_names.sort()
         assert len(samples_names) > 0
         data = []
-        gt_postfix = "normal.png" if self.pbr_type == "normal" else "albedo.png"
+        gt_postfix = None
+        if self.pbr_type == "normal":
+            gt_postfix = "normal.jpg"
+        elif self.pbr_type == "albedo":
+            gt_postfix = "albedo.jpg"
+        elif self.pbr_type == "ambient":
+            gt_postfix = ['Color.jpg', 'NormalDX.jpg', 'Roughness.jpg', 'Metalness.jpg']
+        elif self.pbr_type == "polyhaven":
+            gt_postfix = ["_diff_4k.jpg", "_nor_dx_4k.jpg", "_rough_4k.jpg", "_metal_4k.jpg"]
+
         for i, name in enumerate(samples_names):
-            ## text
-            row_text = name
-            keys = row_text.split('_')
+            # print(i)
+            # if len(data) > 4:
+            #     break
+            # ## text
+            # row_text = name
+            # keys = row_text.split('_')
             ## images 
-            gt_path = os.path.join(self._data_dir, name, "samll_" + gt_postfix)
-            input_path = os.path.join(self._data_dir, name, 'render_o.png')
-            if not os.path.isfile(input_path) or not os.path.isfile(gt_path):
+            name_pre = ''
+            if self.pbr_type == "ambient":
+                name_pre = name + '_4K_'  
+            gt_paths = {}
+            gt_paths['color'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[0])
+            gt_paths['normal'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[1])
+            gt_paths['roughness'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[2])
+            gt_paths['metalness'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[3])
+            input_path = os.path.join(self._data_dir, name, 'render_512.png')
+            if not os.path.isfile(input_path):
+                continue
+            isValid = True
+            for key, path in gt_paths.items():
+                if key == 'metalness':
+                    continue
+                elif not os.path.isfile(path):
+                    isValid = False
+                    break
+            if not isValid:
                 continue
             input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
             input = np.array(input)
             
-            gt = Image.open(gt_path).convert("RGB")
+            gts = {}
+            color = Image.open(gt_paths['color'])
+            color = np.asarray(color.resize((512, 512)).convert("RGB"))
+            gts['color'] = color
+
+            normal = Image.open(gt_paths['normal'])
+            normal = np.asarray(normal.resize((512, 512)).convert("RGB"))
+            gts['normal'] = normal
+            
+            roughness = Image.open(gt_paths['roughness'])
+            roughness = np.asarray(roughness.resize((512, 512)).convert("RGB"))
+            gts['roughness'] = roughness.mean(axis=-1, keepdims=True).astype(np.uint8)
+            
+            metalness = (np.zeros((512, 512, 1)) * 255.0).astype(np.uint8)
+            if os.path.exists(gt_paths['metalness']):
+                metalness = Image.open(gt_paths['metalness'])
+                metalness = np.asarray(metalness.resize((512, 512)).convert("RGB"))
+            gts['metalness'] = metalness.mean(axis=-1, keepdims=True).astype(np.uint8)
+            ## check img shapes and value
+            # for k, v in gts.items():
+            #     print(k, '\t', np.min(v), np.max(v), v.dtype)
+            # assert 0
+            gt = np.concatenate([gts['color'], gts['normal'], gts["roughness"], gts["metalness"]], axis=-1)
+            # img = Image.open(path).convert("RGB")
+            #     img = img.resize((512, 512))
+            #     gt.append(img)
             # gt = gt.resize(input.shape[:-1])  # 1024 -> 512 already processed
-            gt = np.array(gt)
+            # gt = np.array(gt)
             
             data.append([input, gt])
         return data

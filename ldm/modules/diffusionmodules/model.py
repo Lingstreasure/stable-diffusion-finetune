@@ -126,7 +126,6 @@ class ResnetBlock(nn.Module):
 
         if temb is not None:
             h = h + self.temb_proj(nonlinearity(temb))[:,:,None,None]
-
         h = self.norm2(h)
         h = nonlinearity(h)
         h = self.dropout(h)
@@ -474,6 +473,7 @@ class Decoder(nn.Module):
         self.in_channels = in_channels
         self.give_pre_end = give_pre_end
         self.tanh_out = tanh_out
+        self.out_ch = out_ch
 
         # compute in_ch_mult, block_in and curr_res at lowest res
         in_ch_mult = (1,)+tuple(ch_mult)
@@ -526,11 +526,18 @@ class Decoder(nn.Module):
 
         # end
         self.norm_out = Normalize(block_in)
-        self.conv_out = torch.nn.Conv2d(block_in,
-                                        out_ch,
-                                        kernel_size=3,
-                                        stride=1,
-                                        padding=1)
+        if out_ch == 3:
+            self.conv_out = torch.nn.Conv2d(block_in,
+                                            out_ch,
+                                            kernel_size=3,
+                                            stride=1,
+                                            padding=1)
+        else:
+            self.conv_out_ = torch.nn.Conv2d(block_in,
+                                            out_ch,
+                                            kernel_size=3,
+                                            stride=1,
+                                            padding=1)
 
     def forward(self, z):
         #assert z.shape[1:] == self.z_shape[1:]
@@ -562,7 +569,10 @@ class Decoder(nn.Module):
 
         h = self.norm_out(h)
         h = nonlinearity(h)
-        h = self.conv_out(h)
+        if self.out_ch == 3:
+            h = self.conv_out(h)
+        else:
+            h = self.conv_out_(h)
         if self.tanh_out:
             h = torch.tanh(h)
         return h

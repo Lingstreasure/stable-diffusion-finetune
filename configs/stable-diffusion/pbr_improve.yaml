@@ -1,0 +1,100 @@
+model:
+  base_learning_rate: 1.0e-4
+  target: ldm.models.pbr_autoencoder_.PBRAutoEncoderImprove
+  params:
+    embed_dim: 4
+    # monitor: train/rec_loss
+
+    ddconfig:
+      double_z: True
+      tanh_out: True
+      z_channels: 4
+      resolution: 256
+      in_channels: 3
+      out_ch: 8
+      ch: 128
+      ch_mult:
+      - 1
+      - 2
+      - 4
+      - 4
+      num_res_blocks: 2
+      attn_resolutions: []
+      dropout: 0.0
+
+    lossconfig:
+      target: ldm.modules.losses.PBRDecoderLoss
+      params:
+        perceptual_weight: 0
+        render_weight: 0.05
+        random_perceptual_weight: 0.5
+
+    scheduler_config: # 10000 warmup steps
+      target: ldm.lr_scheduler.LambdaLinearScheduler
+      params:
+        warm_up_steps: [ 1 ] # NOTE for resuming. use 10000 if starting from scratch
+        cycle_lengths: [ 10000000000000 ] # incredibly large number to prevent corner cases
+        f_start: [ 1.e-6 ]
+        f_max: [ 1. ]
+        f_min: [ 1. ]
+
+data:
+  target: train_pbr.DataModuleFromConfig
+  params:
+    batch_size: 4
+    num_workers: 16
+    num_val_workers: 16 # Avoid a weird val dataloader issue
+    train:
+      target: ldm.data.simple.PBRMap
+      params:
+        data_dir: /home/d5/hz/DataSet/mat
+        pbr_type: ambient
+        mode: train
+        # image_transforms:
+        # # - target: torchvision.transforms.Resize
+        # #   params:
+        # #     size: 512
+        # #     interpolation: 3
+        # # - target: torchvision.transforms.RandomCrop
+        # #   params:
+        # #     size: 512
+        # - target: torchvision.transforms.RandomResizedCrop
+        #   params:
+        #     size: 512
+        #     scale: [0.8, 1.0]
+        # - target: torchvision.transforms.RandomVerticalFlip
+        # - target: torchvision.transforms.RandomHorizontalFlip
+    validation:
+      target: ldm.data.simple.PBRMap
+      params:
+        data_dir: /home/d5/hz/DataSet/mat
+        pbr_type: polyhaven
+        mode: polyhaven
+        
+
+
+lightning:
+  find_unused_parameters: False
+
+  modelcheckpoint:
+    params:
+      # every_n_train_steps:
+      save_top_k: -1
+      # monitor: val/rec_loss
+      save_weights_only: true
+
+  callbacks:
+    image_logger:
+      target: train_pbr.ImageLogger
+      params:
+        batch_frequency: 200
+        max_images: 4
+        increase_log_steps: False
+        log_first_step: True
+        log_all_val: True
+        log_on_batch_idx: True
+
+  trainer:
+    benchmark: True
+    num_sanity_val_steps: 0
+    accumulate_grad_batches: 1
