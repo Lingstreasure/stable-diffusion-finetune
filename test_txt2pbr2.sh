@@ -1,0 +1,13 @@
+python scripts/txt2pbr2.py \
+    --prompt "couch seat chair fabric" \
+    --outdir "outputs/all_pbr" \
+    --diff_ckpt "logs/old/2023-02-02T02-57-03_v2-inference/checkpoints/epoch=000096.ckpt" \
+    --pbr_ckpt "logs/2023-02-18T07-29-09_all_v2/checkpoints/epoch=000098.ckpt" \
+    --H 512 --W 512 \
+    --n_samples 4 \
+    --ddim_steps 25 \
+    --config "configs/stable-diffusion/txt2pbr2.yaml" \
+    --dpm_solver \
+    --scale 3.0 \
+    --device_num 1 \
+    --seed 42 \

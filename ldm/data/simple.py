@@ -174,22 +174,48 @@ class Text2Material(Dataset):
     
 class PBRMap(Dataset):
     def __init__(self, 
-                 data_dir: str, 
+                 data_root_dir: str, 
+                 data_list_file_dir: str, 
+                 dataset_names: list, 
                  mode: str = "train",
-                 pbr_type: str = "albedo",
+                 data_type: str = "all",
                  image_transforms: list = []):
         """The Dataset of pbr map for training decoder of VAE
 
         Args:
-            data_dir (str): path of data
+            data_root_dir (str): dir of all data
+            data_list_file_dir (str): dir of data_list_file
+            dataset_names (list): the name of dataset, e.g. "ambient"/"polyhaven" or other. 
             mode (str, optional): mode of the dataset, e.g. "train"/"test" or other. Defaults to "train".
-            pbr_type (str, optional): the tyep of pbr map, e.g. "albedo"/"normal" or other. Defaults to "albedo".
+            data_type (str, optional): the tyep of pbr map, e.g. "albedo"/"normal" or other. Defaults to "all".
             image_transforms (list, optional): the transforms preprocessed on the image. Defaults to [].
         """             
         super().__init__()
-        self._data_dir = os.path.join(data_dir, mode)
+        self.dataset_pos_dict = {"ambient": ['Color.jpg', 
+                                             'NormalDX.jpg', 
+                                             'Roughness.jpg', 
+                                             'Metalness.jpg'], 
+                                 "polyhaven": ["_diff_512.jpg", 
+                                               "_nor_dx_512.jpg", 
+                                               "_rough_512.jpg", 
+                                               "_metal_512.jpg"], 
+                                 "sharetextures": ["basecolor_512.jpg", 
+                                                   "normalDX_512.jpg", 
+                                                   "roughness_512.jpg", 
+                                                   "metalness_512.jpg"], 
+                                 "3dtextures": ["basecolor_512.jpg", 
+                                                "normal_512.jpg", 
+                                                "roughness_512.jpg", 
+                                                "metalness_512.jpg"]}  # data_pre : [albedo, normal, rough, metal]
+        self.dataset_pre_dict = {"ambient": '{}_512_', 
+                                 "polyhaven": '', 
+                                 "sharetextures": '', 
+                                 "3dtextures": ''}
+        self._dataset_names = dataset_names
+        self._data_root_dir = data_root_dir
+        self._data_list_file_dir = data_list_file_dir
         self._mode = mode
-        self.pbr_type = pbr_type
+        self._data_type = data_type
         self._tform = self._set_transforms(image_transforms)
         self._data = self._preprocess()
         self._dataset_length:int = len(self._data)
@@ -197,81 +223,90 @@ class PBRMap(Dataset):
         # print("Data Num : {} for {}".format(self._dataset_length, mode))
     
     def _preprocess(self) -> list:
-        samples_names = os.listdir(self._data_dir)
-        samples_names.sort()
-        assert len(samples_names) > 0
         data = []
-        gt_postfix = None
-        if self.pbr_type == "normal":
-            gt_postfix = "normal.jpg"
-        elif self.pbr_type == "albedo":
-            gt_postfix = "albedo.jpg"
-        elif self.pbr_type == "ambient":
-            gt_postfix = ['Color.jpg', 'NormalDX.jpg', 'Roughness.jpg', 'Metalness.jpg']
-        elif self.pbr_type == "polyhaven":
-            gt_postfix = ["_diff_4k.jpg", "_nor_dx_4k.jpg", "_rough_4k.jpg", "_metal_4k.jpg"]
+        pre_len = 0
+        for dataset_name in self._dataset_names:
+            data_list_file_path = os.path.join(self._data_list_file_dir, dataset_name + '_' + self._mode + '.txt')
+            sample_names = []
+            with open(data_list_file_path) as f:
+                lines = f.readlines()
+                for line in lines:
+                    name = line.strip()
+                    sample_names.append(name)
+                    
+            assert len(sample_names) > 0, "No data here"
+            gt_postfix = None
+            if self._data_type == "albedo":
+                gt_postfix = self.dataset_pos_dict[dataset_name][0]
+            elif self._data_type == "normal":
+                gt_postfix = self.dataset_pos_dict[dataset_name][1]
+            elif self._data_type == "all":
+                gt_postfix = self.dataset_pos_dict[dataset_name]
 
-        for i, name in enumerate(samples_names):
-            # print(i)
-            # if len(data) > 4:
-            #     break
-            # ## text
-            # row_text = name
-            # keys = row_text.split('_')
-            ## images 
-            name_pre = ''
-            if self.pbr_type == "ambient":
-                name_pre = name + '_4K_'  
-            gt_paths = {}
-            gt_paths['color'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[0])
-            gt_paths['normal'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[1])
-            gt_paths['roughness'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[2])
-            gt_paths['metalness'] = os.path.join(self._data_dir, name, name_pre + gt_postfix[3])
-            input_path = os.path.join(self._data_dir, name, 'render_512.png')
-            if not os.path.isfile(input_path):
-                continue
-            isValid = True
-            for key, path in gt_paths.items():
-                if key == 'metalness':
+            for i, name in enumerate(sample_names):
+                # print(i)
+                # if len(data) > 4:
+                #     break
+                ## images 
+                name_pre = ''
+                # if dataset_name == "ambient":
+                #     name_pre = name + '_512_'  
+                name_pre = self.dataset_pre_dict[dataset_name].format(name)
+                path_pre = os.path.join(self._data_root_dir, dataset_name, name)
+                gt_paths = {}
+                gt_paths['albedo'] = os.path.join(path_pre, name_pre + gt_postfix[0])
+                gt_paths['normal'] = os.path.join(path_pre, name_pre + gt_postfix[1])
+                gt_paths['roughness'] = os.path.join(path_pre, name_pre + gt_postfix[2])
+                gt_paths['metalness'] = os.path.join(path_pre, name_pre + gt_postfix[3])
+                input_path = os.path.join(path_pre, 'render_512.png')
+                if not os.path.isfile(input_path):
                     continue
-                elif not os.path.isfile(path):
-                    isValid = False
-                    break
-            if not isValid:
-                continue
-            input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
-            input = np.array(input)
-            
-            gts = {}
-            color = Image.open(gt_paths['color'])
-            color = np.asarray(color.resize((512, 512)).convert("RGB"))
-            gts['color'] = color
+                
+                isValid = True
+                for key, path in gt_paths.items():
+                    if key == 'metalness':
+                        continue
+                    elif not os.path.isfile(path):
+                        isValid = False
+                        break
+                if not isValid:
+                    continue
+                
+                input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
+                input = np.array(input)
+                
+                gts = {}
+                color = Image.open(gt_paths['albedo'])
+                color = np.asarray(color.convert("RGB"))
+                gts['albedo'] = color
 
-            normal = Image.open(gt_paths['normal'])
-            normal = np.asarray(normal.resize((512, 512)).convert("RGB"))
-            gts['normal'] = normal
-            
-            roughness = Image.open(gt_paths['roughness'])
-            roughness = np.asarray(roughness.resize((512, 512)).convert("RGB"))
-            gts['roughness'] = roughness.mean(axis=-1, keepdims=True).astype(np.uint8)
-            
-            metalness = (np.zeros((512, 512, 1)) * 255.0).astype(np.uint8)
-            if os.path.exists(gt_paths['metalness']):
-                metalness = Image.open(gt_paths['metalness'])
-                metalness = np.asarray(metalness.resize((512, 512)).convert("RGB"))
-            gts['metalness'] = metalness.mean(axis=-1, keepdims=True).astype(np.uint8)
-            ## check img shapes and value
-            # for k, v in gts.items():
-            #     print(k, '\t', np.min(v), np.max(v), v.dtype)
-            # assert 0
-            gt = np.concatenate([gts['color'], gts['normal'], gts["roughness"], gts["metalness"]], axis=-1)
-            # img = Image.open(path).convert("RGB")
-            #     img = img.resize((512, 512))
-            #     gt.append(img)
-            # gt = gt.resize(input.shape[:-1])  # 1024 -> 512 already processed
-            # gt = np.array(gt)
-            
-            data.append([input, gt])
+                normal = Image.open(gt_paths['normal'])
+                normal = np.asarray(normal.convert("RGB"))
+                gts['normal'] = normal
+                
+                roughness = Image.open(gt_paths['roughness'])
+                roughness = np.asarray(roughness.convert("RGB"))
+                gts['roughness'] = roughness.mean(axis=-1, keepdims=True).astype(np.uint8)
+                
+                metalness = (np.zeros((512, 512, 1)) * 255.0).astype(np.uint8)
+                if os.path.exists(gt_paths['metalness']):
+                    metalness = Image.open(gt_paths['metalness'])
+                    metalness = np.asarray(metalness.convert("RGB"))
+                gts['metalness'] = metalness.mean(axis=-1, keepdims=True).astype(np.uint8)
+                ## check img shapes and value
+                # for k, v in gts.items():
+                #     print(k, '\t', np.min(v), np.max(v), v.dtype)
+                # assert 0
+                gt = np.concatenate([gts['albedo'], gts['normal'], gts["roughness"], gts["metalness"]], axis=-1)
+                # img = Image.open(path).convert("RGB")
+                #     img = img.resize((512, 512))
+                #     gt.append(img)
+                # gt = gt.resize(input.shape[:-1])  # 1024 -> 512 already processed
+                # gt = np.array(gt)
+                data.append([input, gt])
+        #     print(f"{self._mode} {dataset_name}: {len(data) - pre_len}")
+        #     pre_len = len(data)
+        # assert 0
         return data
     
     def _set_transforms(self, img_transforms: list = []) -> transforms:
