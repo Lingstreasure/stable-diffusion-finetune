@@ -1,12 +1,12 @@
 python scripts/txt2img.py \
-    --prompt "red fabric with grid pattern" \
-    --outdir "outputs/with_pattern_text" \
-    --ckpt "logs/2022-12-08T11-29-47_material_with_pattern/checkpoints/epoch=000048.ckpt" \
+    --prompt "red cracked bricks" \
+    --outdir "outputs/wo_pattern_text" \
+    --ckpt logs/2023-02-20T23-25-07_ae/checkpoints/last.ckpt \
     --H 512 --W 512 \
-    --n_samples 4 \
+    --n_samples 1 \
     --ddim_steps 25 \
     --seed 42 \
     --dpm_solver \
-    --config "configs/stable-diffusion/material.yaml" \
+    --config configs/stable-diffusion/material.yaml \
     --scale 5.0 \
-    --device_num 3
+    --device_num 1 \

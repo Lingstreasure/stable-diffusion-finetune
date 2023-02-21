@@ -1,8 +1,8 @@
 model:
-  base_learning_rate: 1.0e-05
+  base_learning_rate: 5.0e-05
   target: ldm.models.diffusion.ddpm.LatentDiffusion
   params:
-    # use_ema: False
+    use_ema: False
     linear_start: 0.00085
     linear_end: 0.0120
     num_timesteps_cond: 1
@@ -72,13 +72,13 @@ model:
 data:
   target: main.DataModuleFromConfig
   params:
-    batch_size: 1
-    num_workers: 6
+    batch_size: 4
+    num_workers: 12
     num_val_workers: 0 # Avoid a weird val dataloader issue
     train:
       target: ldm.data.simple.Text2Material
       params:
-        data_dir: /root/hz/DataSet/mat/data
+        data_dir: /home/d5/hz/DataSet/mat
         mode: train
         image_transforms:
         - target: torchvision.transforms.Resize
@@ -97,7 +97,7 @@ data:
     validation:
       target: ldm.data.simple.Text2Material
       params:
-        data_dir: /root/hz/DataSet/mat/data
+        data_dir: /home/d5/hz/DataSet/mat
         mode: test
         image_transforms:
         - target: torchvision.transforms.Resize
@@ -111,15 +111,15 @@ lightning:
 
   modelcheckpoint:
     params:
-      every_n_train_steps: 2000
-      save_top_k: -1
-      monitor: NULL
+      every_n_train_steps: 3000
+      save_top_k: 3
+      monitor: train/loss_epoch
 
   callbacks:
     image_logger:
       target: main.ImageLogger
       params:
-        batch_frequency: 2
+        batch_frequency: 3
         max_images: 4
         increase_log_steps: False
         log_first_step: True
@@ -130,6 +130,7 @@ lightning:
           inpaint: False
           plot_progressive_rows: False
           plot_diffusion_rows: False
+          ddim_steps: 25
           N: 4
           unconditional_guidance_scale: 3.0
           unconditional_guidance_label: [""]

@@ -1242,6 +1242,7 @@ class LatentDiffusion(DDPM):
     def sample_log(self, cond, batch_size, ddim, ddim_steps, **kwargs):
         if ddim:
             ddim_sampler = DPMSolverSampler(self)
+            # ddim_sampler = DDIMSampler(self)
             shape = (self.channels, self.image_size, self.image_size)
             samples, intermediates = ddim_sampler.sample(ddim_steps, batch_size,
                                                          shape, cond, verbose=False, **kwargs)
@@ -1355,8 +1356,8 @@ class LatentDiffusion(DDPM):
                                                  unconditional_guidance_scale=unconditional_guidance_scale,
                                                  unconditional_conditioning=uc,
                                                  )
-                x_samples_cfg = self.decode_first_stage(samples_cfg)
-                log[f"samples_cfg_scale_{unconditional_guidance_scale:.2f}"] = x_samples_cfg
+            x_samples_cfg = self.decode_first_stage(samples_cfg)
+            log[f"samples_cfg_scale_{unconditional_guidance_scale:.2f}"] = x_samples_cfg
 
         if inpaint:
             # make a simple center square
@@ -1394,6 +1395,7 @@ class LatentDiffusion(DDPM):
                 return log
             else:
                 return {key: log[key] for key in return_keys}
+        
         return log
 
     def configure_optimizers(self):
