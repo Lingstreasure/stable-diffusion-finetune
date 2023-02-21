@@ -1,8 +1,8 @@
 model:
-  base_learning_rate: 4.5e-6
+  base_learning_rate: 1e-5
   target: ldm.models.autoencoder.AutoencoderKL
   params:
-    monitor: "val/rec_loss"
+    # monitor: "val/rec_loss"
     embed_dim: 4
     lossconfig:
       target: ldm.modules.losses.LPIPSWithDiscriminator
@@ -10,6 +10,7 @@ model:
         disc_start: 50001
         kl_weight: 0.000001
         disc_weight: 0.5
+        disc_factor: 0.0
 
     ddconfig:
       double_z: True
@@ -24,30 +25,61 @@ model:
       dropout: 0.0
 
 data:
-  target: main.DataModuleFromConfig
+  target: train_pbr.DataModuleFromConfig
   params:
-    batch_size: 12
-    wrap: True
+    batch_size: 3
+    num_workers: 16
+    num_val_workers: 16 # Avoid a weird val dataloader issue
     train:
-      target: ldm.data.imagenet.ImageNetSRTrain
+      target: ldm.data.simple.MaterialImage
       params:
-        size: 256
-        degradation: pil_nearest
+        data_root_dir: /media/d5/7D1922F98D178B12/hz/DataSet/mat/data
+        data_list_file_dir: /home/d5/hz/DataSet/mat/code
+        dataset_names: [ambient, polyhaven, sharetextures, 3dtextures]
+        mode: train
+        # image_transforms:
+        # # - target: torchvision.transforms.Resize
+        # #   params:
+        # #     size: 512
+        # #     interpolation: 3
+        # # - target: torchvision.transforms.RandomCrop
+        # #   params:
+        # #     size: 512
+        # - target: torchvision.transforms.RandomResizedCrop
+        #   params:
+        #     size: 512
+        #     scale: [0.8, 1.0]
+        # - target: torchvision.transforms.RandomVerticalFlip
+        # - target: torchvision.transforms.RandomHorizontalFlip
     validation:
-      target: ldm.data.imagenet.ImageNetSRValidation
+      target: ldm.data.simple.MaterialImage
       params:
-        size: 256
-        degradation: pil_nearest
+        data_root_dir: /media/d5/7D1922F98D178B12/hz/DataSet/mat/data
+        data_list_file_dir: /home/d5/hz/DataSet/mat/code
+        dataset_names: [ambient, polyhaven, sharetextures, 3dtextures]
+        mode: test
 
 lightning:
+  find_unused_parameters: False
+
+  modelcheckpoint:
+    params:
+      # every_n_train_steps:
+      save_top_k: -1
+      # monitor: val/rec_loss
+      # save_weights_only: True
+
   callbacks:
     image_logger:
-      target: main.ImageLogger
+      target: train_ae.ImageLogger
       params:
-        batch_frequency: 1000
-        max_images: 8
-        increase_log_steps: True
+        batch_frequency: 1
+        max_images: 4
+        increase_log_steps: False
+        log_first_step: True
+        log_all_val: True
+        log_on_batch_idx: True
 
   trainer:
     benchmark: True
-    accumulate_grad_batches: 2
+    accumulate_grad_batches: 1

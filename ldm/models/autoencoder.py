@@ -8,7 +8,7 @@ from ldm.modules.diffusionmodules.model import Encoder, Decoder
 from ldm.modules.distributions.distributions import DiagonalGaussianDistribution
 
 from ldm.util import instantiate_from_config
-
+from einops import rearrange
 
 class VQModel(pl.LightningModule):
     def __init__(self,
@@ -301,6 +301,7 @@ class AutoencoderKL(pl.LightningModule):
         self.quant_conv = torch.nn.Conv2d(2*ddconfig["z_channels"], 2*embed_dim, 1)
         self.post_quant_conv = torch.nn.Conv2d(embed_dim, ddconfig["z_channels"], 1)
         self.embed_dim = embed_dim
+        self.rank_zero_print = self.print if self.trainer else print
         if colorize_nlabels is not None:
             assert type(colorize_nlabels)==int
             self.register_buffer("colorize", torch.randn(3, colorize_nlabels, 1, 1))
@@ -308,6 +309,7 @@ class AutoencoderKL(pl.LightningModule):
             self.monitor = monitor
         if ckpt_path is not None:
             self.init_from_ckpt(ckpt_path, ignore_keys=ignore_keys)
+        self.frozen_weights()
 
     def init_from_ckpt(self, path, ignore_keys=list()):
         sd = torch.load(path, map_location="cpu")["state_dict"]
@@ -320,6 +322,20 @@ class AutoencoderKL(pl.LightningModule):
         self.load_state_dict(sd, strict=False)
         print(f"Restored from {path}")
 
+    def frozen_weights(self):
+        self.decoder.eval()
+        self.encoder.train()
+        self.quant_conv.train()
+        self.post_quant_conv.train()
+        for p in self.decoder.parameters():
+            p.requires_grad = False
+        # for p in self.quant_conv.parameters():
+        #     p.requires_grad = False
+        # for p in self.post_quant_conv.parameters():
+        #     p.requires_grad = False
+        self.rank_zero_print("Frozen the weights of decoder")
+
+    
     def encode(self, x):
         h = self.encoder(x)
         moments = self.quant_conv(h)
@@ -344,29 +360,36 @@ class AutoencoderKL(pl.LightningModule):
         x = batch[k]
         if len(x.shape) == 3:
             x = x[..., None]
-        x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format).float()
+        # x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format).float()
         return x
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):#, optimizer_idx):
         inputs = self.get_input(batch, self.image_key)
         reconstructions, posterior = self(inputs)
 
-        if optimizer_idx == 0:
-            # train encoder+decoder+logvar
-            aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, optimizer_idx, self.global_step,
-                                            last_layer=self.get_last_layer(), split="train")
-            self.log("aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-            self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=False)
-            return aeloss
+        # train encoder+decoder+logvar
+        aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, 0, self.global_step,
+                                        last_layer=self.get_last_layer(), split="train")
+        # self.log("train/aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
+        return aeloss
+        
+        # if optimizer_idx == 0:
+        #     # train encoder+decoder+logvar
+        #     aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, optimizer_idx, self.global_step,
+        #                                     last_layer=self.get_last_layer(), split="train")
+        #     self.log("aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        #     self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=False)
+        #     return aeloss
+        #
+        # if optimizer_idx == 1:
+        #     # train the discriminator
+        #     discloss, log_dict_disc = self.loss(inputs, reconstructions, posterior, optimizer_idx, self.global_step,
+        #                                         last_layer=self.get_last_layer(), split="train")
 
-        if optimizer_idx == 1:
-            # train the discriminator
-            discloss, log_dict_disc = self.loss(inputs, reconstructions, posterior, optimizer_idx, self.global_step,
-                                                last_layer=self.get_last_layer(), split="train")
-
-            self.log("discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-            self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=False)
-            return discloss
+        #     self.log("discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        #     self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=False)
+        #     return discloss
 
     def validation_step(self, batch, batch_idx):
         inputs = self.get_input(batch, self.image_key)
@@ -374,24 +397,30 @@ class AutoencoderKL(pl.LightningModule):
         aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, 0, self.global_step,
                                         last_layer=self.get_last_layer(), split="val")
 
-        discloss, log_dict_disc = self.loss(inputs, reconstructions, posterior, 1, self.global_step,
-                                            last_layer=self.get_last_layer(), split="val")
+        # discloss, log_dict_disc = self.loss(inputs, reconstructions, posterior, 1, self.global_step,
+        #                                     last_layer=self.get_last_layer(), split="val")
 
-        self.log("val/rec_loss", log_dict_ae["val/rec_loss"])
-        self.log_dict(log_dict_ae)
-        self.log_dict(log_dict_disc)
-        return self.log_dict
+        # self.log("val/rec_loss", log_dict_ae["val/rec_loss"])
+        self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
+        # self.log_dict(log_dict_disc)
+        # return self.log_dict
+        return aeloss
 
     def configure_optimizers(self):
+        # lr = self.learning_rate
+        # opt_ae = torch.optim.Adam(list(self.encoder.parameters())+
+        #                           list(self.decoder.parameters())+
+        #                           list(self.quant_conv.parameters())+
+        #                           list(self.post_quant_conv.parameters()),
+        #                           lr=lr, betas=(0.5, 0.9))
+        # opt_disc = torch.optim.Adam(self.loss.discriminator.parameters(),
+        #                             lr=lr, betas=(0.5, 0.9))
+        # return [opt_ae, opt_disc], []
+
         lr = self.learning_rate
-        opt_ae = torch.optim.Adam(list(self.encoder.parameters())+
-                                  list(self.decoder.parameters())+
-                                  list(self.quant_conv.parameters())+
-                                  list(self.post_quant_conv.parameters()),
-                                  lr=lr, betas=(0.5, 0.9))
-        opt_disc = torch.optim.Adam(self.loss.discriminator.parameters(),
-                                    lr=lr, betas=(0.5, 0.9))
-        return [opt_ae, opt_disc], []
+        opt = torch.optim.Adam(self.encoder.parameters(), lr=lr, betas=(0.5, 0.9))
+        return [opt], []
+
 
     def get_last_layer(self):
         return self.decoder.conv_out.weight
@@ -403,12 +432,22 @@ class AutoencoderKL(pl.LightningModule):
         x = x.to(self.device)
         if not only_inputs:
             xrec, posterior = self(x)
-            if x.shape[1] > 3:
-                # colorize with random projection
-                assert xrec.shape[1] > 3
-                x = self.to_rgb(x)
-                xrec = self.to_rgb(xrec)
-            log["samples"] = self.decode(torch.randn_like(posterior.sample()))
+            # if x.shape[1] > 3:
+            #     # colorize with random projection
+            #     assert xrec.shape[1] > 3
+            #     x = self.to_rgb(x)
+            #     xrec = self.to_rgb(xrec)
+            # log["samples"] = self.decode(torch.randn_like(posterior.sample()))
+            feature = posterior.sample()
+            feature_maps = rearrange(feature, 'b (c n) h w -> b c (n h) w', c=1)
+            min_value = (feature_maps.min(dim=-1, keepdim=True).values).min(dim=-2, keepdim=True).values
+            max_value = (feature_maps.max(dim=-1, keepdim=True).values).max(dim=-2, keepdim=True).values
+            feature_maps = (feature_maps - min_value) / (max_value - min_value)
+            feature_maps = (feature_maps * 2.0 - 1).clamp_(-1, 1)
+            # feature_maps = np.repeat(feature_maps.cpu().numpy(), 4, axis=-2)
+            # feature_maps = np.repeat(feature_maps, 4, axis=-1)
+            # log["bottle_neck_feature"] = torch.from_numpy(feature_maps).to(self.device)
+            log["feature"] = feature_maps
             log["reconstructions"] = xrec
         log["inputs"] = x
         return log

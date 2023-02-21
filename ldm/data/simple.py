@@ -220,7 +220,7 @@ class PBRMap(Dataset):
         self._data = self._preprocess()
         self._dataset_length:int = len(self._data)
         assert self._dataset_length > 0
-        # print("Data Num : {} for {}".format(self._dataset_length, mode))
+        print("Data Num : {} for {}".format(self._dataset_length, mode))
     
     def _preprocess(self) -> list:
         data = []
@@ -249,8 +249,6 @@ class PBRMap(Dataset):
                 #     break
                 ## images 
                 name_pre = ''
-                # if dataset_name == "ambient":
-                #     name_pre = name + '_512_'  
                 name_pre = self.dataset_pre_dict[dataset_name].format(name)
                 path_pre = os.path.join(self._data_root_dir, dataset_name, name)
                 gt_paths = {}
@@ -330,7 +328,83 @@ class PBRMap(Dataset):
         input = self._img_process(input)
         gt = self._img_process(gt)
         return {"input": input, "gt": gt}
+
+
+class MaterialImage(Dataset):
+    def __init__(self, 
+                 data_root_dir: str, 
+                 data_list_file_dir: str, 
+                 dataset_names: list, 
+                 mode: str = "train",
+                 image_transforms: list = []):
+        """The Dataset of pbr map for training decoder of VAE
+
+        Args:
+            data_dir (str): dir of material images
+            data_list_file_dir (str): dir of data_list_file
+            dataset_names (list): the name of dataset, e.g. "ambient"/"polyhaven" or other. 
+            mode (str, optional): mode of the dataset, e.g. "train"/"test" or other. Defaults to "train".
+            image_transforms (list, optional): the transforms preprocessed on the image. Defaults to [].
+        """             
+        super().__init__()
+        self._dataset_names = dataset_names
+        self._data_root_dir = data_root_dir
+        self._data_list_file_dir = data_list_file_dir
+        self._mode = mode
+        self._tform = self._set_transforms(image_transforms)
+        self._data = self._preprocess()
+        self._dataset_length:int = len(self._data)
+        assert self._dataset_length > 0
+        print("Data Num : {} for {}".format(self._dataset_length, mode))
     
+    def _preprocess(self) -> list:
+        data = []
+        for dataset_name in self._dataset_names:
+            data_list_file_path = os.path.join(self._data_list_file_dir, dataset_name + '_' + self._mode + '.txt')
+            sample_names = []
+            with open(data_list_file_path) as f:
+                lines = f.readlines()
+                for line in lines:
+                    name = line.strip()
+                    sample_names.append(name)
+                    
+            assert len(sample_names) > 0, "No data here"
+
+            for i, name in enumerate(sample_names):
+                print(i)
+                if len(data) > 10:
+                    break
+
+                path_pre = os.path.join(self._data_root_dir, dataset_name, name)
+                input_path = os.path.join(path_pre, 'render_512.png')
+                if not os.path.isfile(input_path):
+                    continue
+
+                input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
+                input = np.array(input)
+                data.append(input)
+
+        return data
+    
+    def _set_transforms(self, img_transforms: list = []) -> transforms:
+        img_transforms = [instantiate_from_config(tt) for tt in img_transforms]
+        img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0), h w c -> c h w
+                            #    transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c')), used for stable-diffusion
+                               transforms.Lambda(lambda x: x * 2. - 1.)])  # (0, 1.0)->(-1.0, 1.0)
+        img_transforms = transforms.Compose(img_transforms)
+        return img_transforms
+    
+    def _img_process(self, image: Image) -> Image:
+        return self._tform(image)
+    
+    def __len__(self) -> int:
+        return self._dataset_length
+    
+    def __getitem__(self, idx: int) -> dict:
+        input = self._data[idx]
+        input = self._img_process(input)
+        return {"image": input}
+
 if __name__ == "__main__":
     dataset = PBRMap("/root/hz/DataSet/mat", "train")
     for i in range(len(dataset)):
