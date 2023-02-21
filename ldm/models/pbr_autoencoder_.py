@@ -66,6 +66,8 @@ class PBRAutoEncoderImprove(pl.LightningModule):
     
     def frozen_weights(self):
         self.encoder = self.encoder.eval()
+        self.quant_conv = self.quant_conv.eval()
+        self.post_quant_conv = self.post_quant_conv.eval()
         for p in self.encoder.parameters():
             p.requires_grad = False
         for p in self.quant_conv.parameters():
@@ -108,6 +110,19 @@ class PBRAutoEncoderImprove(pl.LightningModule):
         x = x.to(memory_format=torch.contiguous_format).float()
         return x
 
+    # def on_train_epoch_start(self) -> None:
+    #     if self.current_epoch == 0:
+    #         self.loss.random_perceptual_weight = 0.1
+    #     if self.current_epoch == 25:
+    #         self.loss.random_perceptual_weight = 0.2
+    #     if self.current_epoch == 50:
+    #         self.loss.random_perceptual_weight = 0.4
+    #     if self.current_epoch == 75:
+    #         self.loss.random_perceptual_weight = 0.8
+    #     if self.current_epoch == 100:
+    #         self.loss.random_perceptual_weight = 1.0
+    #     return None
+
     def training_step(self, batch, batch_idx):
         inputs = self.get_input(batch, self.input_key)
         gts = self.get_input(batch, self.gt_key)
@@ -117,7 +132,7 @@ class PBRAutoEncoderImprove(pl.LightningModule):
         # print(log_dict_decoder)
         # self.log("decoder_loss", decoder_loss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log("lr", self.learning_rate, prog_bar=False, logger=True, on_epoch=True)
-        self.log_dict(log_dict_decoder, prog_bar=False, logger=True, on_step=True, on_epoch=False)
+        self.log_dict(log_dict_decoder, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         return decoder_loss
 
     def validation_step(self, batch, batch_idx):
@@ -128,7 +143,7 @@ class PBRAutoEncoderImprove(pl.LightningModule):
         val_decoder_loss, val_log_dict_decoder = self.loss(gts, reconstructions, inputs, split="val")
         # self.log("val_decoder_loss", val_decoder_loss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         # self.log("lr", self.learning_rate, prog_bar=False, logger=True, on_epoch=True)
-        self.log_dict(val_log_dict_decoder, prog_bar=False, logger=True, on_step=True, on_epoch=False)
+        self.log_dict(val_log_dict_decoder, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         return val_decoder_loss
 
     def configure_optimizers(self):
