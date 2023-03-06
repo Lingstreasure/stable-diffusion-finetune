@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import sys
-sys.path.append("/home/d5/hz/Code/diffmat/diffmat/core")
+sys.path.append("/root/hz/Code/diffmat/diffmat/core")
 from render import Renderer
 from taming.modules.losses.vqperceptual import *  # TODO: taming dependency yes/no?
 
@@ -159,7 +159,7 @@ class PBRDecoderLoss(nn.Module):
 
         log = {"{}/total_loss".format(split): loss.clone().detach().mean(), 
                 "{}/rec_loss".format(split): rec_loss.detach().mean(), 
-               "{}/render_loss".format(split): render_loss.detach().mean(), 
+            #    "{}/render_loss".format(split): render_loss.detach().mean(), 
                 "{}/random_per_loss".format(split): random_p_loss.detach().mean()}
         # if self.perceptual_weight > 0:
         #     log["{}/per_loss".format(split)] = p_loss.detach().mean()

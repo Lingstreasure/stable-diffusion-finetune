@@ -335,7 +335,7 @@ class PBRMap(Dataset):
 
             for i, name in enumerate(sample_names):
                 # print(i)
-                # if len(data) > 4:
+                # if len(data) > 20:
                 #     break
                 ## images 
                 name_pre = ''
@@ -461,9 +461,9 @@ class MaterialImage(Dataset):
             assert len(sample_names) > 0, "No data here"
 
             for i, name in enumerate(sample_names):
-                print(i)
-                if len(data) > 10:
-                    break
+                # print(i)
+                # if len(data) > 500:
+                #     break
 
                 path_pre = os.path.join(self._data_root_dir, dataset_name, name)
                 input_path = os.path.join(path_pre, 'render_512.png')
