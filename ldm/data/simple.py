@@ -101,9 +101,11 @@ class TextOnly(Dataset):
 
 class Text2Material(Dataset):
     """ The Dataset of text-texture pair
-        Args - data_dir : path of data
+        Args - data_root_dir : root dir of data
+             - data_list_file_dir : dir of data_list_file
+             - dataset_names : the name of dataset, e.g. "ambient"/"polyhaven" or other
              - mode : mode of the dataset, e.g. 'train'/'test'
-             -image_transforms : the transforms preprocessed on the image data
+             - image_transforms : the transforms preprocessed on the image data
     """
     def __init__(self, 
                  data_dir: str, 
@@ -171,7 +173,95 @@ class Text2Material(Dataset):
         image = self._img_process(image)
         return {"txt": text, "image": image}
     
+
+class Text2MaterialImprove(Dataset):
+    """ The Dataset of text-texture pair
+        Args - data_root_dir : root dir of data
+             - data_list_file_dir : dir of data_list_file
+             - dataset_names : the name of dataset, e.g. "ambient"/"polyhaven" or other
+             - mode : mode of the dataset, e.g. 'train'/'test'
+             - image_transforms : the transforms preprocessed on the image data
+    """
+    def __init__(self, 
+                 data_root_dir: str, 
+                 data_list_file_dir: str,
+                 dataset_names: list = [], 
+                 mode: str = "train",
+                 image_transforms: list = []):
+        super(Text2Material).__init__()
+        self._data_root_dir = data_root_dir
+        self._data_list_file_dir = data_list_file_dir
+        self._dataset_names = dataset_names
+        self._mode = mode
+        self._tform = self._set_transforms(image_transforms)
+        self._data = self._preprocess()
+        self._dataset_length:int = len(self._data)
+        assert self._dataset_length > 0
+        print("Data Num : {} for {}".format(self._dataset_length, mode))
     
+    def _preprocess(self) -> list:
+        data = []
+        for dataset_name in self._dataset_names:
+            data_list_file_path = os.path.join(self._data_list_file_dir, dataset_name + '_' + self._mode + '.txt')
+            sample_names = []
+            with open(data_list_file_path) as f:
+                lines = f.readlines()
+                for line in lines:
+                    name = line.strip()
+                    sample_names.append(name)
+            
+            sample_names.sort()
+            assert len(sample_names) > 0, "No data here"
+            for i, name in enumerate(sample_names):
+                sample_dir = os.path.join(self._data_root_dir, dataset_name, name)
+                ## text
+                # row_text = name
+                # keys = row_text.split('_')
+                # core_key = str()
+                # for ch in keys[0]:
+                #     if not isdigit(ch):
+                #         core_key += ch
+                # str_checker = core_key.lower()
+                # text = "A texture map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
+                text_path = os.path.join(sample_dir, 'new_text.txt')
+                if not os.path.isfile(text_path):
+                    continue
+                with open(text_path, 'r') as f:
+                    text = f.read().strip()
+
+                ## image
+                image_path = os.path.join(sample_dir, 'render_512.png')
+                if not os.path.isfile(image_path):
+                    continue
+                image = Image.open(image_path)  # PIL.Image
+                image.convert("RGB")  # h w c
+                # if self._mode == "test":
+                #     image = np.zeros(np.array(image).shape, dtype=np.array(image).dtype)
+
+                data.append([text, image])
+                # if len(data) > 12:
+                #     break
+        return data
+    
+    def _set_transforms(self, img_transforms: list = []) -> transforms:
+        img_transforms = [instantiate_from_config(tt) for tt in img_transforms]
+        img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0), h w c -> c h w
+                            #    transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c')), used for stable-diffusion
+                               transforms.Lambda(lambda x: x * 2. - 1.)])  # (0, 1.0)->(-1.0, 1.0)
+        img_transforms = transforms.Compose(img_transforms)
+        return img_transforms
+    
+    def _img_process(self, image: Image) -> Image:
+        return self._tform(image)
+    
+    def __len__(self) -> int:
+        return self._dataset_length
+    
+    def __getitem__(self, idx: int) -> dict:
+        text, image = self._data[idx]
+        image = self._img_process(image)
+        return {"txt": text, "image": image}
+
 class PBRMap(Dataset):
     def __init__(self, 
                  data_root_dir: str, 

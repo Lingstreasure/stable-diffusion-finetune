@@ -1,5 +1,5 @@
 model:
-  base_learning_rate: 5.0e-5
+  base_learning_rate: 1.0e-5
   target: ldm.models.diffusion.ddpm.LatentDiffusion
   params:
     linear_start: 0.00085
@@ -11,16 +11,16 @@ model:
     cond_stage_key: "txt"
     image_size: 64
     channels: 4
-    cond_stage_trainable: false
+    cond_stage_trainable: False
     conditioning_key: crossattn
     monitor: val/loss_simple_ema
     scale_factor: 0.18215
-    use_ema: False # we set this to false because this is an inference only config
+    # use_ema: False # we set this to false because this is an inference only config
 
     scheduler_config: # 10000 warmup steps
       target: ldm.lr_scheduler.LambdaLinearScheduler
       params:
-        warm_up_steps: [ 1 ] # NOTE for resuming. use 10000 if starting from scratch
+        warm_up_steps: [ 1000 ] # NOTE for resuming. use 10000 if starting from scratch
         cycle_lengths: [ 10000000000000 ] # incredibly large number to prevent corner cases
         f_start: [ 1.e-6 ]
         f_max: [ 1. ]
@@ -52,7 +52,7 @@ model:
         monitor: val/rec_loss
         ddconfig:
           #attn_type: "vanilla-xformers"
-          double_z: true
+          double_z: True
           z_channels: 4
           resolution: 256
           in_channels: 3
@@ -82,9 +82,11 @@ data:
     num_workers: 12
     num_val_workers: 0 # Avoid a weird val dataloader issue
     train:
-      target: ldm.data.simple.Text2Material
+      target: ldm.data.simple.Text2MaterialImprove
       params:
-        data_dir: /home/d5/hz/DataSet/mat
+        data_root_dir: /media/d5/7D1922F98D178B12/hz/DataSet/mat/data
+        data_list_file_dir: /home/d5/hz/DataSet/mat/code
+        dataset_names: [ambient, polyhaven, sharetextures, 3dtextures]
         mode: train
         image_transforms:
         - target: torchvision.transforms.Resize
@@ -101,9 +103,11 @@ data:
         - target: torchvision.transforms.RandomVerticalFlip
         - target: torchvision.transforms.RandomHorizontalFlip
     validation:
-      target: ldm.data.simple.Text2Material
+      target: ldm.data.simple.Text2MaterialImprove
       params:
-        data_dir: /home/d5/hz/DataSet/mat
+        data_root_dir: /media/d5/7D1922F98D178B12/hz/DataSet/mat/data
+        data_list_file_dir: /home/d5/hz/DataSet/mat/code
+        dataset_names: [ambient, polyhaven, sharetextures, 3dtextures]
         mode: test
         image_transforms:
         - target: torchvision.transforms.Resize
@@ -117,7 +121,7 @@ lightning:
 
   modelcheckpoint:
     params:
-      every_n_train_steps: 3000
+      # every_n_train_steps: 
       save_top_k: 3
       monitor: train/loss_epoch
       save_weights_only: true
@@ -134,7 +138,7 @@ lightning:
         log_all_val: True
         log_on_batch_idx: True
         log_images_kwargs:
-          # use_ema_scope: True
+          use_ema_scope: True
           inpaint: False
           plot_progressive_rows: False
           plot_diffusion_rows: False
