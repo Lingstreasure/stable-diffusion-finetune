@@ -31,7 +31,7 @@ def main(args):
     
     ## model
     model = MInterface(**args)
-    sd = torch.load(ckpt_path)['state_dict']
+    sd = torch.load(ckpt_path, map_location=device)['state_dict']
     m, u = model.load_state_dict(sd)
     if len(m) > 0:
         print("missing keys:")

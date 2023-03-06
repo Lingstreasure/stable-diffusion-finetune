@@ -30,7 +30,8 @@ class Material(Dataset):
         self.transform = transforms.Compose(
             [
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                # transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                transforms.Lambda(lambda x: x * 2. - 1.)
             ] 
         )
 
@@ -42,7 +43,7 @@ class Material(Dataset):
             sample_dir = os.path.join(data_dir, name)
             img_names = os.listdir(sample_dir)
             for img_name in img_names:
-                if img_name.endswith('render_o.png'):
+                if img_name.endswith('render_512.png'):
                     img_path = os.path.join(sample_dir, img_name)
                     input = Image.open(img_path).convert("RGB")
                     data.append([input, name])
