@@ -117,7 +117,7 @@ def get_parser(**parser_kwargs):
         "-s",
         "--seed",
         type=int,
-        default=23,
+        default=42,
         help="seed for seed_everything",
     )
     parser.add_argument(
@@ -642,24 +642,25 @@ if __name__ == "__main__":
             finetune_from_path = os.path.join(os.getcwd(), str(opt.finetune_from))
             assert os.path.isfile(finetune_from_path)
             old_state = torch.load(finetune_from_path, map_location="cpu")
-            first_stage_model_state = dict()
             if "state_dict" in old_state:
                 rank_zero_print(f"Found nested key 'state_dict' in checkpoint, loading this instead")
                 old_state = old_state["state_dict"]
 
             ### see the structure of state_dict of stable-diffusion
+            first_stage_model_state = old_state.copy()
             for k in old_state.keys():
                 if k.startswith("first_stage_model"):
                     new_k = k.replace("first_stage_model.", "")
                     first_stage_model_state[new_k] = old_state[k]
 
             m, u = model.load_state_dict(first_stage_model_state, strict=False)
+            # m, u = model.load_from_checkpoint(finetune_from_path, **config.model)
             if len(m) > 0:
                 rank_zero_print("missing keys:")
                 rank_zero_print(m)
-            if len(u) > 0:
-                rank_zero_print("unexpected keys:")
-                rank_zero_print(u)
+            # if len(u) > 0:
+            #     rank_zero_print("unexpected keys:")
+            #     rank_zero_print(u)
 
         # trainer and callbacks
         trainer_kwargs = dict()
