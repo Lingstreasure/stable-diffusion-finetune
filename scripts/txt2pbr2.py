@@ -166,7 +166,7 @@ def main():
         help="dynamic thresholding from Imagen, in latent space (TODO: try in pixel space with intermediate decode)",
     )
     parser.add_argument(
-        "--from-file",
+        "--from_file",
         type=str,
         help="if specified, load prompts from this file",
     )
@@ -257,10 +257,10 @@ def main():
         with precision_scope("cuda"):
             with diff_model.ema_scope():
                 tic = time.time()
-                all_samples = list()
                 for n in trange(opt.n_iter, desc="Sampling"):
                     for prompts in tqdm(data, desc="data"):
                         uc = None
+                        all_samples = list()
                         if opt.scale != 1.0:
                             uc = diff_model.get_learned_conditioning(batch_size * [""])
                         if isinstance(prompts, tuple):
@@ -374,16 +374,16 @@ def main():
                         #     img_inters.save(os.path.join(sample_path, f"{base_count:05}_inters.png"))           
                         # base_count += 1
                         
-                if not opt.skip_grid:
-                    # additionally, save as grid
-                    grid = torch.stack(all_samples, 0)
-                    grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-                    grid = make_grid(grid, nrow=n_rows)
+                        if not opt.skip_grid:
+                            # additionally, save as grid
+                            grid = torch.stack(all_samples, 0)
+                            grid = rearrange(grid, 'n b c h w -> (n b) c h w')
+                            grid = make_grid(grid, nrow=n_rows)
 
-                    # to image
-                    grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                    Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'[scale-{opt.scale}]' + prompts[0] + f'[seed-{opt.seed}].png'))
-                    grid_count += 1
+                            # to image
+                            grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
+                            Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'[scale-{opt.scale}]' + prompts[0] + f'[seed-{opt.seed}].png'))
+                            grid_count += 1
 
                 toc = time.time()
 
