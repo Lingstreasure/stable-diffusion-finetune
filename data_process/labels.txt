@@ -1,0 +1,84 @@
+acoustic foam 3
+asphalt 25
+asphalt damage 1
+asphalt damage set 1
+bark 12
+bricks 95
+candy 3
+cardboard 4
+carpet 15
+chainmail 4
+chip 7
+chipboard 3
+christmas tree ornament 10
+clay 4
+concrete 39
+cork 2
+corrugated steel 5
+diamond plate 20
+fabric 78
+facade 26
+fence 12
+fingerprints 9
+foam 3
+footsteps 2
+glazed terracotta 3
+grass 4
+gravel 37
+ground 61
+ice 4
+lava 5
+leaking 9
+leather 48
+manhole cover 8
+marble 26
+metal 55
+metal plates 20
+metal walkway 13
+moss 4
+office ceiling 6
+paint 6
+painted bricks 5
+painted metal 18
+painted plaster 18
+painted wood 5
+painting 1
+paper 5
+pathway 3
+paving stones 131
+payment card 3
+pipe 4
+planks 46
+plaster 6
+plastic 11
+porcelain 3
+rails 1
+road 7
+road lines 16
+rock 53
+rocks 25
+roofing tiles 10
+rope 3
+rust 6
+scattered leaves 7
+scratches 5
+screw set 1
+sheet metal 4
+shells 1
+sign 26
+smear 7
+snow 6
+solar panel 4
+sponge 3
+surface imperfections 13
+tactile paving 7
+tape 4
+terrain 5
+terrazzo 21
+tiles 113
+tree end 4
+wicker 18
+wood 90
+wood chips 2
+wood floor 60
+wood siding 13
