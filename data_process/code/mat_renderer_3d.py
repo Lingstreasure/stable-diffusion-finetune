@@ -1,7 +1,7 @@
 import os.path
 import time
 import sys
-sys.path.append("/home/d5/hz/Code/diffmat/diffmat/core")
+sys.path.append("/root/hz/Code/diffmat/diffmat/core")
 import cv2
 import numpy as np
 import torch
@@ -124,7 +124,7 @@ def processing(id_name, dir_name, root_dir, device='cuda'):
 device = 'cuda'
 light_color = [3300.0, 3300.0, 3300.0]
 r = Renderer(device=device, light_color=light_color, normal_format='dx')
-data_dir = "/media/d5/7D1922F98D178B12/hz/DataSet/mat/data/3dtextures"
+data_dir = "/root/hz/DataSet/mat/data/3dtextures"
 names = os.listdir(data_dir)
 names.sort()
 ## unify the file name
@@ -176,7 +176,7 @@ names.sort()
 # assert 0 
 print(len(names))
 count = 0
-tar_no_rough_dir = "/media/d5/7D1922F98D178B12/hz/DataSet/mat/not_used/no_roughness/3dtextures"
+# tar_no_rough_dir = "/media/d5/7D1922F98D178B12/hz/DataSet/mat/not_used/no_roughness/3dtextures"
 for i in range(0, len(names)):
     # if i < 890:
     #     continue
@@ -230,9 +230,16 @@ for i in range(0, len(names)):
     ## extract text
     keys = dir_name.split('-')[:-1]
     text = ' '.join(keys) 
-    # text_path = os.path.join(data_dir, dir_name, 'text_wo_label.txt')
-    # with open(text_path, "w") as f:
-    #     f.write(text)
+    text_path = os.path.join(data_dir, dir_name, 'text_wo_label.txt')
+    if not os.path.exists(text_path):
+        with open(text_path, "w") as f:
+            f.write(text)
+    
+    ## read text
+    # if not os.path.exists(text_path):
+    #     continue
+    with open(text_path, "r") as f:
+        text = f.read().strip()
     
     ## add label text
     pattern_path = os.path.join(data_dir, dir_name, 'pattern.txt')
@@ -257,6 +264,7 @@ for i in range(0, len(names)):
     # continue
     
     print(i, ' ', dir_name)#, end='')
+    # assert 0
     continue
     l = processing(id_name, dir_name, data_dir, device)
     if l:
