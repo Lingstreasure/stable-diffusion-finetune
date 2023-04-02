@@ -227,6 +227,27 @@ for i in range(0, len(names)):
     #         break
     # continue
     
+    ## unify all the map
+    # img_types = ['jpg', 'png', 'jpeg']
+    # dir_pre = data_dir + '/' + dir_name
+    # normal_path = os.path.join(dir_pre, id_name + "_NormalDX.{}")
+    # color_path = os.path.join(dir_pre, id_name + "_Color.{}")
+    # rough_path = os.path.join(dir_pre, id_name + "_Roughness.{}")
+    # metal_path = os.path.join(dir_pre, id_name + "_Metallic.{}")
+    # for type in img_types:
+    #     real_normal_path = normal_path.format(type)
+    #     if os.path.exists(real_normal_path):
+    #         os.system(f"mv {real_normal_path} {real_normal_path.replace(id_name, '')}")
+    #     real_color_path = color_path.format(type)
+    #     if os.path.exists(real_color_path.format(type)):
+    #         os.system(f"mv {real_color_path} {real_color_path.replace(id_name, '')}")
+    #     real_rough_path = rough_path.format(type)
+    #     if os.path.exists(real_rough_path.format(type)):
+    #         os.system(f"mv {real_rough_path} {real_rough_path.replace(id_name, '')}")
+    #     real_metal_path = metal_path.format(type)
+    #     if os.path.exists(real_metal_path.format(type)):
+    #         os.system(f"mv {real_metal_path} {real_metal_path.replace(id_name, '')}")
+    
     ## extract text
     keys = dir_name.split('-')[:-1]
     text = ' '.join(keys) 
