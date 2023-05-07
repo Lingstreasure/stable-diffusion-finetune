@@ -116,7 +116,7 @@ def get_parser(**parser_kwargs):
         "-s",
         "--seed",
         type=int,
-        default=23,
+        default=42,
         help="seed for seed_everything",
     )
     parser.add_argument(
@@ -860,6 +860,7 @@ if __name__ == "__main__":
 
         # configure learning rate
         bs, base_lr = config.data.params.batch_size, config.model.base_learning_rate
+        weight_decay = config.model.weight_decay
         if not cpu:
             ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
         else:
@@ -879,6 +880,9 @@ if __name__ == "__main__":
             model.learning_rate = base_lr
             rank_zero_print("++++ NOT USING LR SCALING ++++")
             rank_zero_print(f"Setting learning rate to {model.learning_rate:.2e}")
+        
+        model.weight_decay = weight_decay
+        rank_zero_print(f"Model Weight Decay: {model.weight_decay}")
 
 
         # allow checkpointing via USR1
