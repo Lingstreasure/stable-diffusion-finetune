@@ -134,7 +134,7 @@ class PBRDecoderLoss(nn.Module):
         if self.perceptual_weight > 0:
             p_loss = self.perceptual_loss(gts.contiguous(), reconstructions.contiguous()).mean() * self.perceptual_weight
         else:
-            p_loss = 0.0
+            p_loss = torch.tensor(0)
 
         if self.render_weight > 0:
             if self.renderer.device != gts.device:
@@ -146,21 +146,26 @@ class PBRDecoderLoss(nn.Module):
                                                     torch.ones((B, 1, H, W)).float().to(gts.device)])
             render_loss = torch.abs((inputs * 2.0 - 1).contiguous() - render_imgs.contiguous()).mean() * self.render_weight
         else:
-            render_loss = 0.0
+            render_loss = torch.tensor(0)
         
         if self.random_perceptual_weight > 0:
             indexes = torch.randint(0, C, (3,))
             random_p_loss = self.perceptual_loss(gts[:, indexes, ...].contiguous(), 
                                                  reconstructions[:, indexes, ...].contiguous()).mean() * self.random_perceptual_weight
         else:
-            random_p_loss = 0.0
+            random_p_loss = torch.tensor(0)
 
         loss = rec_loss + random_p_loss + render_loss #+ p_loss
 
         log = {"{}/total_loss".format(split): loss.clone().detach().mean(), 
-                "{}/rec_loss".format(split): rec_loss.detach().mean(), 
-            #    "{}/render_loss".format(split): render_loss.detach().mean(), 
-                "{}/random_per_loss".format(split): random_p_loss.detach().mean()}
+               "{}/rec_loss".format(split): rec_loss.detach().mean()}
+        
+        if self.render_weight > 0:
+            log["{}/render_loss".format(split)] = render_loss.detach().mean()
+            
+        if self.random_perceptual_weight > 0:
+            log["{}/random_per_loss".format(split)] = random_p_loss.detach().mean()
+            
         # if self.perceptual_weight > 0:
         #     log["{}/per_loss".format(split)] = p_loss.detach().mean()
         return loss, log
