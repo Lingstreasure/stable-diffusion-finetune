@@ -223,12 +223,13 @@ class Text2MaterialImprove(Dataset):
                 #         core_key += ch
                 # str_checker = core_key.lower()
                 # text = "A texture map of " + ' '.join([key for key in keys[1:] if str_checker.find(key) == -1]) + " {}".format(core_key)
-                text_path = os.path.join(sample_dir, 'new_text.txt')
+                text_path = os.path.join(sample_dir, 'texts', 'full_text.txt')
                 if not os.path.isfile(text_path):
                     continue
                 with open(text_path, 'r') as f:
                     text = f.read().strip()
-
+                ## label for experiment
+                # text = text.split(' ')[-1]
                 ## image
                 image_path = os.path.join(sample_dir, 'render_512.png')
                 if not os.path.isfile(image_path):
@@ -335,8 +336,8 @@ class PBRMap(Dataset):
 
             for i, name in enumerate(sample_names):
                 # print(i)
-                # if len(data) > 20:
-                #     break
+                if len(data) > 20:
+                    break
                 ## images 
                 name_pre = ''
                 name_pre = self.dataset_pre_dict[dataset_name].format(name)
@@ -417,6 +418,197 @@ class PBRMap(Dataset):
         # images = self._img_process(images)
         input = self._img_process(input)
         gt = self._img_process(gt)
+        return {"input": input, "gt": gt}
+
+
+class PBRMapAugmentation(Dataset):
+    def __init__(self, 
+                 data_root_dir: str, 
+                 data_list_file_dir: str, 
+                 dataset_names: list, 
+                 mode: str = "train",
+                 data_type: str = "all",
+                 image_transforms: list = []):
+        """The Dataset of pbr map for training decoder of VAE
+
+        Args:
+            data_root_dir (str): dir of all data
+            data_list_file_dir (str): dir of data_list_file
+            dataset_names (list): the name of dataset, e.g. "ambient"/"polyhaven" or other. 
+            mode (str, optional): mode of the dataset, e.g. "train"/"test" or other. Defaults to "train".
+            data_type (str, optional): the tyep of pbr map, e.g. "albedo"/"normal" or other. Defaults to "all".
+            image_transforms (list, optional): the transforms preprocessed on the image. Defaults to [].
+        """             
+        super().__init__()
+        self.dataset_pos_dict = {"train": {"ambient": ['_4K_Color.{}', 
+                                                        '_4K_NormalDX.{}', 
+                                                        '_4K_Roughness.{}', 
+                                                        '_4K_Metalness.{}', 
+                                                        'render_4K.png'], 
+                                            "polyhaven": ["_diff_4k.{}", 
+                                                        "_nor_dx_4k.{}", 
+                                                        "_rough_4k.{}", 
+                                                        "_metal_4k.{}", 
+                                                        "render_4K.png"], 
+                                            "sharetextures": ["basecolor.{}", 
+                                                            "normalDX.{}", 
+                                                            "roughness.{}", 
+                                                            "metallic.{}", 
+                                                            "render_4K.png"], 
+                                            "3dtextures": ['Color.{}', 
+                                                            'NormalDX.{}', 
+                                                            'Roughness.{}', 
+                                                            'Metallic.{}',
+                                                            'render_1K.png']},  # data_pre : [albedo, normal, rough, metal]
+                                 "test": {"ambient": ['Color.jpg', 
+                                                    'NormalDX.jpg', 
+                                                    'Roughness.jpg', 
+                                                    'Metalness.jpg',
+                                                    'render_512.png'], 
+                                        "polyhaven": ["_diff_512.jpg", 
+                                                    "_nor_dx_512.jpg", 
+                                                    "_rough_512.jpg", 
+                                                    "_metal_512.jpg",
+                                                    'render_512.png'], 
+                                        "sharetextures": ["basecolor_512.jpg", 
+                                                        "normalDX_512.jpg", 
+                                                        "roughness_512.jpg", 
+                                                        "metalness_512.jpg",
+                                                        'render_512.png'], 
+                                        "3dtextures": ["basecolor_512.jpg", 
+                                                        "normal_512.jpg", 
+                                                        "roughness_512.jpg", 
+                                                        "metalness_512.jpg",
+                                                        'render_512.png']}}  # data_pre : [albedo, normal, rough, metal]
+        self.dataset_pre_dict = {"ambient": '{}', 
+                                 "polyhaven": '', 
+                                 "sharetextures": '', 
+                                 "3dtextures": ''}
+        self.img_types = ['jpg', 'png', 'jpeg']
+        self._dataset_names = dataset_names
+        self._data_root_dir = data_root_dir
+        self._data_list_file_dir = data_list_file_dir
+        self._mode = mode
+        self._data_type = data_type
+        self._tform = self._set_transforms(image_transforms)
+        self._data = self._preprocess()
+        self._dataset_length:int = len(self._data)
+        assert self._dataset_length > 0
+        print("Data Num : {} for {}".format(self._dataset_length, mode))
+    
+    def _preprocess(self) -> list:
+        data = []
+        pre_len = 0
+        for dataset_name in self._dataset_names:
+            data_list_file_path = os.path.join(self._data_list_file_dir, dataset_name + '_' + self._mode + '.txt')
+            sample_names = []
+            with open(data_list_file_path) as f:
+                lines = f.readlines()
+                for line in lines:
+                    name = line.strip()
+                    sample_names.append(name)
+                    
+            assert len(sample_names) > 0, "No data here"
+            gt_postfix = None
+            if self._data_type == "albedo":
+                gt_postfix = self.dataset_pos_dict[self._mode][dataset_name][0]
+            elif self._data_type == "normal":
+                gt_postfix = self.dataset_pos_dict[self._mode][dataset_name][1]
+            elif self._data_type == "all":
+                gt_postfix = self.dataset_pos_dict[self._mode][dataset_name]
+
+            for i, name in enumerate(sample_names):
+                # print(i)
+                # if len(data) > 20:
+                #     break
+                ## images 
+                name_pre = self.dataset_pre_dict[dataset_name].format(name)
+                path_pre = os.path.join(self._data_root_dir, dataset_name, name)
+                gt_paths = {}
+                real_type = str()
+                for type in self.img_types:
+                    if os.path.exists(os.path.join(path_pre, name_pre + gt_postfix[0].format(type))):
+                        real_type = type
+                    
+                gt_paths['albedo'] = os.path.join(path_pre, name_pre + gt_postfix[0].format(real_type))
+                gt_paths['normal'] = os.path.join(path_pre, name_pre + gt_postfix[1].format(real_type))
+                gt_paths['roughness'] = os.path.join(path_pre, name_pre + gt_postfix[2].format(real_type))
+                gt_paths['metalness'] = os.path.join(path_pre, name_pre + gt_postfix[3].format(real_type))
+                input_path = os.path.join(path_pre, gt_postfix[4])
+                if not os.path.isfile(input_path):
+                    continue
+                
+                isValid = True
+                for key, path in gt_paths.items():
+                    if key == 'metalness':
+                        continue
+                    elif not os.path.isfile(path):
+                        isValid = False
+                        break
+                if not isValid:
+                    continue
+                
+                input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
+                input = np.array(input)
+                
+                gts = {}
+                color = Image.open(gt_paths['albedo'])
+                color = np.asarray(color.convert("RGB"))
+                H, W, C = color.shape
+                if input.shape[0] != H or input.shape[1] != W:
+                    continue
+                gts['albedo'] = color
+
+                normal = Image.open(gt_paths['normal'])
+                normal = np.asarray(normal.convert("RGB"))
+                gts['normal'] = normal
+                
+                roughness = Image.open(gt_paths['roughness'])
+                roughness = np.asarray(roughness.convert("RGB"))[..., 0, None]
+                # gts['roughness'] = roughness.mean(axis=-1, keepdims=True).astype(np.uint8)
+                gts['roughness'] = roughness
+                
+                metalness = np.zeros((H, W, 1), dtype=np.uint8)
+                if os.path.exists(gt_paths['metalness']):
+                    metalness = Image.open(gt_paths['metalness'])
+                    metalness = np.asarray(metalness.convert("RGB"))[..., 0, None]
+                # gts['metalness'] = metalness.mean(axis=-1, keepdims=True).astype(np.uint8)
+                gts['metalness'] = metalness
+                ## check img shapes and value
+                # for k, v in gts.items():
+                #     print(k, '\t', np.min(v), np.max(v), v.dtype)
+                # assert 0
+                gt = np.concatenate([gts['albedo'], gts['normal'], gts["roughness"], gts["metalness"]], axis=-1)
+                # img = Image.open(path).convert("RGB")
+                #     img = img.resize((512, 512))
+                #     gt.append(img)
+                # gt = gt.resize(input.shape[:-1])  # 1024 -> 512 already processed
+                # gt = np.array(gt)
+                data.append([input, gt])
+                
+        return data
+    
+    def _set_transforms(self, img_transforms: list = []) -> transforms:
+        img_transforms_list = [transforms.ToTensor()]
+        img_transforms_list.extend([instantiate_from_config(tt) for tt in img_transforms])
+        img_transforms_list.append(transforms.Lambda(lambda x: x * 2. - 1.))  # (0, 1.0)->(-1.0, 1.0)
+        img_transforms_list = transforms.Compose(img_transforms_list)
+        return img_transforms_list
+    
+    def _img_process(self, image: Image) -> Image:
+        return self._tform(image)
+    
+    def __len__(self) -> int:
+        return self._dataset_length
+    
+    def __getitem__(self, idx: int) -> dict:
+        input, gt = self._data[idx]
+        images = np.concatenate([input, gt], axis=-1)  # concat at channel dim
+        images = self._img_process(images)
+        # input = self._img_process(input)
+        # gt = self._img_process(gt)
+        input = images[:3, ...]
+        gt = images[3:, ...]
         return {"input": input, "gt": gt}
 
 
