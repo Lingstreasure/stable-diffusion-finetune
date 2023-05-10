@@ -1,5 +1,6 @@
 model:
-  base_learning_rate: 1.0e-5
+  base_learning_rate: 5.0e-6
+  weight_decay: 0
   target: ldm.models.diffusion.ddpm.LatentDiffusion
   params:
     linear_start: 0.00085
@@ -11,16 +12,16 @@ model:
     cond_stage_key: "txt"
     image_size: 64
     channels: 4
-    cond_stage_trainable: False
+    cond_stage_trainable: True
     conditioning_key: crossattn
-    monitor: val/loss_simple_ema
+    # monitor: val/loss_simple_ema
     scale_factor: 0.18215
-    # use_ema: False # we set this to false because this is an inference only config
+    use_ema: False # we set this to false because this is an inference only config
 
     scheduler_config: # 10000 warmup steps
       target: ldm.lr_scheduler.LambdaLinearScheduler
       params:
-        warm_up_steps: [ 1000 ] # NOTE for resuming. use 10000 if starting from scratch
+        warm_up_steps: [ 0 ] # NOTE for resuming. use 10000 if starting from scratch
         cycle_lengths: [ 10000000000000 ] # incredibly large number to prevent corner cases
         f_start: [ 1.e-6 ]
         f_max: [ 1. ]
@@ -49,7 +50,7 @@ model:
       target: ldm.models.autoencoder.AutoencoderKL
       params:
         embed_dim: 4
-        monitor: val/rec_loss
+        monitor: val/loss
         ddconfig:
           #attn_type: "vanilla-xformers"
           double_z: True
@@ -72,20 +73,20 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenOpenCLIPEmbedder
       params:
-        freeze: True
+        freeze: False
         layer: "penultimate"
 
 data:
   target: main.DataModuleFromConfig
   params:
-    batch_size: 8
+    batch_size: 4
     num_workers: 12
     num_val_workers: 0 # Avoid a weird val dataloader issue
     train:
       target: ldm.data.simple.Text2MaterialImprove
       params:
-        data_root_dir: /media/d5/7D1922F98D178B12/hz/DataSet/mat/data
-        data_list_file_dir: /home/d5/hz/DataSet/mat/code
+        data_root_dir: /root/hz/DataSet/mat/data
+        data_list_file_dir: data_file
         dataset_names: [ambient, polyhaven, sharetextures, 3dtextures]
         mode: train
         image_transforms:
@@ -105,8 +106,8 @@ data:
     validation:
       target: ldm.data.simple.Text2MaterialImprove
       params:
-        data_root_dir: /media/d5/7D1922F98D178B12/hz/DataSet/mat/data
-        data_list_file_dir: /home/d5/hz/DataSet/mat/code
+        data_root_dir: /root/hz/DataSet/mat/data
+        data_list_file_dir: data_file
         dataset_names: [ambient, polyhaven, sharetextures, 3dtextures]
         mode: test
         image_transforms:
@@ -123,7 +124,7 @@ lightning:
     params:
       # every_n_train_steps: 
       save_top_k: 3
-      monitor: train/loss_epoch
+      monitor: val/loss
       save_weights_only: true
 
 
@@ -131,7 +132,7 @@ lightning:
     image_logger:
       target: main.ImageLogger
       params:
-        batch_frequency: 3
+        batch_frequency: 5
         max_images: 4
         increase_log_steps: False
         log_first_step: True

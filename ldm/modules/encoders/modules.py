@@ -228,6 +228,9 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
         assert layer in self.LAYERS
         model, _, _ = open_clip.create_model_and_transforms(arch, device=torch.device('cpu'), pretrained=version)
         del model.visual
+        del model.transformer.resblocks[-1]
+        del model.logit_scale
+        del model.text_projection
         self.model = model
 
         self.device = device
@@ -253,6 +256,13 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
         return z
 
     def encode_with_transformer(self, text):
+        # print('##################')
+        # print("FrozenOpenClip input", text.device)
+        # print(self.device)
+        # # for para in self.model.parameters():
+        # print(self.model.token_embedding.weight.device)
+        # print('##################')
+        # assert 0
         x = self.model.token_embedding(text)  # [batch_size, n_ctx, d_model]
         x = x + self.model.positional_embedding
         x = x.permute(1, 0, 2)  # NLD -> LND
@@ -263,8 +273,8 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
 
     def text_transformer_forward(self, x: torch.Tensor, attn_mask = None):
         for i, r in enumerate(self.model.transformer.resblocks):
-            if i == len(self.model.transformer.resblocks) - self.layer_idx:
-                break
+            # if i == len(self.model.transformer.resblocks) - self.layer_idx:
+            #     break
             if self.model.transformer.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint(r, x, attn_mask)
             else:
