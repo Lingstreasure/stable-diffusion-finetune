@@ -7,8 +7,15 @@ colors = ['blue', 'light', 'dark', 'red', 'green', 'yellow', 'orange',
           'pink', 'purple', 'grey']
 
 data_dir = "/root/hz/DataSet/mat/data/ambient"
+source_dir = "/root/hz/DataSet/material/train"
 names = os.listdir(data_dir)
+source_names = os.listdir(source_dir)
 names.sort()
+source_names.sort()
+source_dict = dict()
+for name in source_names:
+    key = name.split('_')[0]
+    source_dict[key] = name
 print("Total len: ", len(names))
 for i in range(0, len(names)):
     ### generate text: source text, text_wo_color, text_wo_pattern, full_text
@@ -26,37 +33,47 @@ for i in range(0, len(names)):
     os.makedirs(text_dir, exist_ok=True)
     
     ## source text
-    source_keys = dir_name.split('-')[:-1]
-    source_text = ' '.join(source_keys)
+    source_keys = []
+    if source_dict.get(dir_name):
+        source_dir_name = source_dict[dir_name]
+        source_keys = source_dir_name.split('_')[1:]
+    else:
+        pure_name = str()
+        for ch in dir_name:
+            if ch.isdigit():
+                break
+            else:
+                pure_name += ch
+        source_keys = [pure_name.lower()]
+    source_text = ', '.join(source_keys)
     source_text_path = opt.join(text_dir, 'source_text.txt')
     with open(source_text_path, 'w') as f:
         f.write(source_text)
         
     ## text without pattern
-    text_wo_pattern = str()
-    with open(text_wo_pattern_path, 'r') as f:
-        text_wo_pattern = f.read().strip()
-    text_wo_pattern_new_path = opt.join(text_dir, 'text_wo_pattern.txt')
-    os.system(f"cp {text_wo_pattern_path} {text_wo_pattern_new_path}")
+    # text_wo_pattern = str()
+    # with open(text_wo_pattern_path, 'r') as f:
+    #     text_wo_pattern = f.read().strip()
+    # text_wo_pattern_new_path = opt.join(text_dir, 'text_wo_pattern.txt')
+    # os.system(f"cp {text_wo_pattern_path} {text_wo_pattern_new_path}")
     
     ## full text
-    full_text = str()
-    with open(full_text_path, 'r') as f:
-        full_text = f.read().strip()
-    full_text_new_path = opt.join(text_dir, 'full_text.txt')
-    os.system(f"cp {full_text_path} {full_text_new_path}")
+    # full_text = str()
+    # with open(full_text_path, 'r') as f:
+    #     full_text = f.read().strip()
+    # full_text_new_path = opt.join(text_dir, 'full_text.txt')
+    # os.system(f"cp {full_text_path} {full_text_new_path}")
     
     ## text without color
-    text_wo_color_keys = []
-    keys = full_text.split(' ')
-    for k in keys:
-        if k not in colors:
-            text_wo_color_keys.append(k)          
-
-    text_wo_color = ' '.join(text_wo_color_keys).strip()
-    text_wo_color_path = opt.join(text_dir, 'text_wo_color.txt')
-    with open(text_wo_color_path, 'w') as f:
-        f.write(text_wo_color)
+    # text_wo_color_keys = []
+    # keys = full_text.split(' ')
+    # for k in keys:
+    #     if k not in colors:
+    #         text_wo_color_keys.append(k)          
+    # text_wo_color = ' '.join(text_wo_color_keys).strip()
+    # text_wo_color_path = opt.join(text_dir, 'text_wo_color.txt')
+    # with open(text_wo_color_path, 'w') as f:
+    #     f.write(text_wo_color)
     
     print(f"{i} {dir_name}")
     # assert 0
