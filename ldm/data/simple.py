@@ -201,6 +201,8 @@ class Text2MaterialImprove(Dataset):
     
     def _preprocess(self) -> list:
         data = []
+        num2English = {1:'one', 2:'two', 3:'three', 4:'four', 5:'five', 6:'six',
+                   7:'seven', 8:'eight', 9:'nine', 10:'ten', 11:'eleven', 12:'twelve'}
         for dataset_name in self._dataset_names:
             data_list_file_path = os.path.join(self._data_list_file_dir, dataset_name + '_' + self._mode + '.txt')
             sample_names = []
@@ -228,6 +230,40 @@ class Text2MaterialImprove(Dataset):
                     continue
                 with open(text_path, 'r') as f:
                     text = f.read().strip()
+                    
+                idx = text.find("arranged in")
+                if idx > -1:
+                    c_idx = text.find('[]')
+                    if c_idx > -1:
+                        text = text.replace('[]', 'common')
+                        
+                    keys = text.strip().split(' ')
+                    arr_idx = keys.index("arranged") if "arranged" in keys else -1
+                    a_idx = keys.index("a") if "a" in keys else -1
+                    pat_idx = keys.index("pattern")  if "pattern" in keys else -1
+                    pat2_idx = keys.index("pattern,") if "pattern," in keys else -1
+                    if a_idx > arr_idx:  ## change grid style
+                        pass
+                        # r_c_idx = a_idx + 1
+                        # grid_idx = a_idx + 2
+                        # r, c = keys[r_c_idx].split('x') if 'x' in keys[r_c_idx] else ['20', '20']
+                        # r = int(r)
+                        # c = int(c)
+                        # if r in num2English.keys() and c in num2English.keys():
+                        #     row = num2English[int(r)]
+                        #     column = num2English[int(c)]
+                        #     keys[grid_idx] = 'of ' + row + " rows and " + column + ' columns' + ',' if keys[grid_idx].endswith(',') else ''
+                        # else:
+                        #     keys[grid_idx] = 'formation' + ',' if keys[grid_idx].endswith(',') else ''
+                        # keys[r_c_idx] = 'grid'
+                    elif pat_idx > arr_idx:  ## change 'pattern' to 'formation'
+                        keys[pat_idx] = "formation"
+                    elif pat2_idx > arr_idx:
+                        keys[pat2_idx] = "formation,"
+                    
+                    text = ' '.join(keys)
+                    # print(text)
+                # text = "A texture map of " + text
                 ## label for experiment
                 # text = text.split(' ')[-1]
                 ## image
@@ -239,8 +275,8 @@ class Text2MaterialImprove(Dataset):
                 # if self._mode == "test":
                 #     image = np.zeros(np.array(image).shape, dtype=np.array(image).dtype)
 
-                data.append([text, image])
-                # if len(data) > 12:
+                data.append([name, text, image])
+                # if len(data) > 10:  
                 #     break
         return data
     
@@ -259,9 +295,9 @@ class Text2MaterialImprove(Dataset):
         return self._dataset_length
     
     def __getitem__(self, idx: int) -> dict:
-        text, image = self._data[idx]
+        name, text, image = self._data[idx]
         image = self._img_process(image)
-        return {"txt": text, "image": image}
+        return {"txt": text, "image": image, "name":name}
 
 class PBRMap(Dataset):
     def __init__(self, 
@@ -336,8 +372,8 @@ class PBRMap(Dataset):
 
             for i, name in enumerate(sample_names):
                 # print(i)
-                if len(data) > 20:
-                    break
+                # if len(data) > 20:
+                #     break
                 ## images 
                 name_pre = ''
                 name_pre = self.dataset_pre_dict[dataset_name].format(name)
