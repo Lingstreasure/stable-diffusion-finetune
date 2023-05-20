@@ -1,0 +1,1 @@
+TOKENIZERS_PARALLELISM=true python scripts/test_clip_score.py
