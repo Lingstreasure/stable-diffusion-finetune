@@ -2,6 +2,7 @@ model:
   base_learning_rate: 1.0e-4
   target: ldm.models.pbr_autoencoder_.PBRAutoEncoderImprove
   params:
+    # mode: test
     embed_dim: 4
     # monitor: val/rec_loss
 
@@ -26,24 +27,27 @@ model:
       target: ldm.modules.losses.PBRDecoderLoss
       params:
         perceptual_weight: 0
-        # render_weight: 0.02
+        render_weight: 0
         random_perceptual_weight: 0.1
+        disc_weight: 0.0
+        disc_start: 10000
+        disc_factor: 1.0
 
-    scheduler_config: # 10000 warmup steps
-      target: ldm.lr_scheduler.LambdaLinearScheduler
-      params:
-        warm_up_steps: [ 1 ] # NOTE for resuming. use 10000 if starting from scratch
-        cycle_lengths: [ 10000000000000 ] # incredibly large number to prevent corner cases
-        f_start: [ 1.e-6 ]
-        f_max: [ 1. ]
-        f_min: [ 1. ]
+    # scheduler_config: # 10000 warmup steps
+    #   target: ldm.lr_scheduler.LambdaLinearScheduler
+    #   params:
+    #     warm_up_steps: [ 1 ] # NOTE for resuming. use 10000 if starting from scratch
+    #     cycle_lengths: [ 10000000000000 ] # incredibly large number to prevent corner cases
+    #     f_start: [ 1.e-6 ]
+    #     f_max: [ 1. ]
+    #     f_min: [ 1. ]
 
 data:
   target: train_pbr.DataModuleFromConfig
   params:
     batch_size: 2
     num_workers: 12
-    num_val_workers: 12 # Avoid a weird val dataloader issue
+    num_val_workers: 6 # Avoid a weird val dataloader issue
     train:
       target: ldm.data.simple.PBRMap
       params:
@@ -83,19 +87,19 @@ lightning:
   modelcheckpoint:
     params:
       # every_n_train_steps:
-      save_top_k: -1
-      # monitor: val/rec_loss
-      save_weights_only: True
+      save_top_k: 3
+      monitor: val/rec_loss
+      # save_weights_only: True
 
   callbacks:
     image_logger:
       target: train_pbr.ImageLogger
       params:
-        batch_frequency: 150
+        batch_frequency: 300
         max_images: 4
         increase_log_steps: False
         log_first_step: True
-        log_all_val: True
+        log_all_val: False
         log_on_batch_idx: True
 
   trainer:
