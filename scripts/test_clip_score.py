@@ -63,12 +63,14 @@ if __name__ == "__main__":
     device = "cuda:{}".format(opt.device_num)
     
     print("################ Prepaing Metric: Clip Score ################")
-    clip = CLIPScore(f"openai/{opt.clip_type}").to(device)
-    clip.requires_grad_(False)
+    # clip = CLIPScore(f"openai/{opt.clip_type}").to(device)
+    # clip.requires_grad_(False)
+    clip_single = CLIPScore(f"openai/{opt.clip_type}").to(device)
+    clip_single.requires_grad_(False)
     
     print("################ Prepaing Dataset ################")
     dataset_dict = {}
-    for t in ["ambient", "polyhaven", "sharetextures", "3dtextures"]:
+    for t in ["ambient"]:#, "polyhaven", "sharetextures", "3dtextures"]:
         train_dataset = Text2MaterialImprove(data_root_dir=opt.data_root_dir, 
                                             data_list_file_dir=opt.data_list_file_dir, 
                                             dataset_names=[t], 
@@ -84,28 +86,48 @@ if __name__ == "__main__":
         dataset_dict[t] = [train_dataloader, test_dataloader]
     
     print("################ Begin Calculating ################")
-    data_scores = {}
+    # data_scores = {}
+    # for d_type, datas in dataset_dict.items():
+    #     for data in datas:
+    #         length = len(data)
+    #         for i, inputs in enumerate(data):
+    #             images = inputs['image'].to(device)
+    #             texts = inputs['txt']
+    #             names = inputs['name']
+    #             clip.update(images, texts)
+    #             print(f"{i}/{length}")
+        
+    #     final_clip_score = clip.compute()
+    #     data_scores[d_type] = final_clip_score
+    #     print(d_type, '\t', final_clip_score)
+    #     clip.clear()
+        
+    # print("################ Final Clip Score ################")
+    # total_scores = 0
+    # for k, v in data_scores.items():
+    #     total_scores += v
+    #     print(k, '\t', "{:.2f}".format(v))
+    # all_score = total_scores / 4
+    # print("all", '\t', "{:.2f}".format(all_score))
+    
+    ### check every sample
     for d_type, datas in dataset_dict.items():
         for data in datas:
             length = len(data)
             for i, inputs in enumerate(data):
                 images = inputs['image'].to(device)
-                text = inputs['txt']
-                clip.update(images, text)
-                print(f"{i}/{length}")
-        
-        final_clip_score = clip.compute()
-        data_scores[d_type] = final_clip_score
-        print(d_type, '\t', final_clip_score)
-        clip.clear()
-        
-    print("################ Final Clip Score ################")
-    total_scores = 0
-    for k, v in data_scores.items():
-        total_scores += v
-        print(k, '\t', "{:.2f}".format(v))
-    all_score = total_scores / 4
-    print("all", '\t', "{:.2f}".format(all_score))
+                texts = inputs['txt']
+                names = inputs['name']
+                for j in range(images.shape[0]):
+                    img = images[j].unsqueeze_(0)
+                    text = [texts[j]]
+                    name = [names[j]]
+                    ## calculate clip score
+                    clip_single.update(img, text)
+                    score = clip_single.compute()
+                    clip_single.clear()
+                    print(f'{name}', '\t', score)
+    # assert 0
     
     ## 1 new / 2 add "A texture map of" / 3 add "A center flashed texture map of" / 4 wo "arranged in a ?x? grid" / 5 wo "?x?" / 6 "pattern"->"formation"
     ## 7 "?x?" -> "of ? rows and ? columns" + 6 + 8 / 8 "[]" -> "common" / 
