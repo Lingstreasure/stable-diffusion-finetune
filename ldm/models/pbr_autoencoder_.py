@@ -123,49 +123,72 @@ class PBRAutoEncoderImprove(pl.LightningModule):
     #         self.loss.random_perceptual_weight = 1.0
     #     return None
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx):
         inputs = self.get_input(batch, self.input_key)
         gts = self.get_input(batch, self.gt_key)
         reconstructions, posterior = self(inputs)
 
-        decoder_loss, log_dict_decoder = self.loss(gts, reconstructions, inputs, split="train")
-        # print(log_dict_decoder)
-        # self.log("decoder_loss", decoder_loss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        self.log("lr", self.learning_rate, prog_bar=False, logger=True, on_epoch=True)
-        self.log_dict(log_dict_decoder, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        return decoder_loss
+        # decoder_loss, log_dict_decoder = self.loss(gts, reconstructions, inputs, split="train")
+        # # print(log_dict_decoder)
+        # # self.log("decoder_loss", decoder_loss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        # self.log("lr", self.learning_rate, prog_bar=False, logger=True, on_epoch=True)
+        # self.log_dict(log_dict_decoder, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        # return decoder_loss
+        
+        if optimizer_idx == 0:
+            # train decoder
+            decoder_loss, log_dict_decoder = self.loss(gts, reconstructions, inputs, optimizer_idx, 
+                                                       self.global_step, last_layer=self.get_last_layer(), 
+                                                       split="train")
+            self.log_dict(log_dict_decoder, prog_bar=False, logger=True, on_step=True, on_epoch=True)
+            return decoder_loss
+        
+        if optimizer_idx == 1:
+            # train the discriminator
+            discloss, log_dict_disc = self.loss(gts, reconstructions, inputs, optimizer_idx, 
+                                                self.global_step, last_layer=self.get_last_layer(), 
+                                                split="train")
+            self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=True)
+            return discloss
 
     def validation_step(self, batch, batch_idx):
         inputs = self.get_input(batch, self.input_key)
         gts = self.get_input(batch, self.gt_key)
         reconstructions, posterior = self(inputs)
     
-        val_decoder_loss, val_log_dict_decoder = self.loss(gts, reconstructions, inputs, split="val")
-        # self.log("val_decoder_loss", val_decoder_loss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        # self.log("lr", self.learning_rate, prog_bar=False, logger=True, on_epoch=True)
-        self.log_dict(val_log_dict_decoder, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        return val_decoder_loss
+        decoder_loss, log_dict_decoder = self.loss(gts, reconstructions, inputs, 0, self.global_step,
+                                                   last_layer=self.get_last_layer(), split="val")
+        discloss, log_dict_disc = self.loss(gts, reconstructions, inputs, 1, self.global_step, 
+                                            last_layer=self.get_last_layer(), split="val")
+        # self.log("val/rec_loss", log_dict_decoder["val/rec_loss"], prog_bar=True, logger=True, on_step=False, on_epoch=True)
+        self.log_dict(log_dict_decoder, prog_bar=False, logger=True, on_step=False, on_epoch=True)
+        self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=False)
+        return decoder_loss
 
     def configure_optimizers(self):
         lr = self.learning_rate
         opt = torch.optim.Adam(self.decoder.parameters(), lr=lr, betas=(0.5, 0.9))
-        if self.use_scheduler:
-            assert 'target' in self.scheduler_config
-            scheduler = instantiate_from_config(self.scheduler_config)
+        # if self.use_scheduler:
+        #     assert 'target' in self.scheduler_config
+        #     scheduler = instantiate_from_config(self.scheduler_config)
 
-            self.print("Setting up LambdaLR scheduler...")
-            scheduler = [
-                {
-                    'scheduler': LambdaLR(opt, lr_lambda=scheduler.schedule),
-                    'interval': 'step',
-                    'frequency': 1
-                }
-            ]
-            return [opt], scheduler
+        #     self.print("Setting up LambdaLR scheduler...")
+        #     scheduler = [
+        #         {
+        #             'scheduler': LambdaLR(opt, lr_lambda=scheduler.schedule),
+        #             'interval': 'step',
+        #             'frequency': 1
+        #         }
+        #     ]
+        #     return [opt], scheduler
+        if self.loss.disc_weight > 0.0:
+            opt_disc = torch.optim.Adam(self.loss.discriminator.parameters(),
+                                        lr=lr, betas=(0.5, 0.9))
+            return [opt, opt_disc], []
         return [opt], []
 
     def get_last_layer(self):
-        return self.decoder.conv_out.weight
+        return self.decoder.conv_out_.weight
 
     @torch.no_grad()
     def log_images(self, batch, only_inputs=False, **kwargs):
@@ -175,8 +198,8 @@ class PBRAutoEncoderImprove(pl.LightningModule):
         gts = self.get_input(batch, self.gt_key)
         gts = gts.to(self.device)
         log["inputs"] = inputs
-        if self.loss.renderer.device != self.device:
-            self.loss.renderer.to(self.device)
+        # if self.loss.renderer.device != self.device:
+        #     self.loss.renderer.to(self.device)
         if not only_inputs:
             xrec, posterior = self(inputs)
             B, C, H, W = xrec.shape
@@ -190,12 +213,12 @@ class PBRAutoEncoderImprove(pl.LightningModule):
                 log["rough_rec"] = xrec[:, 6:7, ...]#.repeat(1, 3, 1, 1)
                 log["metal_rec"] = xrec[:, 7:, ...]#.repeat(1, 3, 1, 1)
                 
-                render_img = self.loss.renderer.evaluate(*[(xrec[:, :3, ...] + 1.0) / 2.0, 
-                                                            (xrec[:, 3:6, ...] + 1.0) / 2.0, 
-                                                            (xrec[:, 6:7, ...] + 1.0) / 2.0, 
-                                                            (xrec[:, 7:, ...] + 1.0) / 2.0, 
-                                                            torch.ones((B, 1, H, W)).float().to(self.device)])
-                log["render"] = (render_img * 2.0 - 1.0).clamp_(-1, 1)
+            #     render_img = self.loss.renderer.evaluate(*[(xrec[:, :3, ...] + 1.0) / 2.0, 
+            #                                                 (xrec[:, 3:6, ...] + 1.0) / 2.0, 
+            #                                                 (xrec[:, 6:7, ...] + 1.0) / 2.0, 
+            #                                                 (xrec[:, 7:, ...] + 1.0) / 2.0, 
+            #                                                 torch.ones((B, 1, H, W)).float().to(self.device)])
+            #     log["render"] = (render_img * 2.0 - 1.0).clamp_(-1, 1)
             else:
                 log["gts"] = gts
                 log["reconstructions"] = xrec

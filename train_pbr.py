@@ -371,7 +371,8 @@ class ImageLogger(Callback):
 
     def log_img(self, pl_module, batch, batch_idx, split="train"):
         # check_idx = batch_idx if self.log_on_batch_idx else pl_module.global_step
-        check_idx = batch_idx if split == "val" else pl_module.global_step
+        # check_idx = batch_idx if split == "val" else pl_module.global_step
+        check_idx = pl_module.global_step
         if self.log_all_val and split == "val":
             should_log = True
         else:
@@ -620,6 +621,7 @@ if __name__ == "__main__":
         trainer_config = lightning_config.get("trainer", OmegaConf.create())
         # default to ddp
         trainer_config["accelerator"] = "ddp"  # DistributedDataParallel 
+        # trainer_config["accelerator"] = "dp"
         for k in nondefault_trainer_args(opt):
             trainer_config[k] = getattr(opt, k)
         if not "gpus" in trainer_config:
@@ -661,7 +663,7 @@ if __name__ == "__main__":
             # if len(u) > 0:
             #     rank_zero_print("unexpected keys:")
             #     rank_zero_print(u)
-
+        
         # trainer and callbacks
         trainer_kwargs = dict()
 
@@ -747,9 +749,9 @@ if __name__ == "__main__":
                     # "log_momentum": True
                 }
             },
-            "cuda_callback": {
-                "target": "main.CUDACallback"
-            },
+            # "cuda_callback": {
+            #     "target": "main.CUDACallback"
+            # },
         }
         if version.parse(pl.__version__) >= version.parse('1.4.0'):
             default_callbacks_cfg.update({'checkpoint_callback': modelckpt_cfg})
