@@ -45,6 +45,43 @@ def load_model_from_config(config, ckpt, model_type="diffusion", verbose=False):
     return model
 
 
+def process_prompts(texts):
+    for i, text in enumerate(texts):
+        idx = text.find("arranged in")
+        if idx > -1:
+            c_idx = text.find('[]')
+            if c_idx > -1:
+                text = text.replace('[]', 'common')
+                
+            keys = text.strip().split(' ')
+            arr_idx = keys.index("arranged") if "arranged" in keys else -1
+            a_idx = keys.index("a") if "a" in keys else -1
+            # pat_idx = keys.index("pattern")  if "pattern" in keys else -1
+            # pat2_idx = keys.index("pattern,") if "pattern," in keys else -1
+            if a_idx > arr_idx and arr_idx > -1:  ## change grid style
+                # pass
+                keys = keys[:arr_idx] + keys[arr_idx + 5:] if (arr_idx + 5) < len(keys) else []
+                # r_c_idx = a_idx + 1
+                # grid_idx = a_idx + 2
+                # r, c = keys[r_c_idx].split('x') if 'x' in keys[r_c_idx] else ['20', '20']
+                # r = int(r)
+                # c = int(c)
+                # if r in num2English.keys() and c in num2English.keys():
+                #     row = num2English[int(r)]
+                #     column = num2English[int(c)]
+                #     keys[grid_idx] = 'of ' + row + " rows and " + column + ' columns' + ',' if keys[grid_idx].endswith(',') else ''
+                # else:
+                #     keys[grid_idx] = 'formation' + ',' if keys[grid_idx].endswith(',') else ''
+                # keys[r_c_idx] = 'grid'
+            # elif pat_idx > arr_idx:  ## change 'pattern' to 'formation'
+            #     keys[pat_idx] = "formation"
+            # elif pat2_idx > arr_idx:
+            #     keys[pat2_idx] = "formation,"
+            
+            text = ' '.join(keys)
+        texts[i] = text
+    return texts
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -265,6 +302,7 @@ def main():
                             uc = diff_model.get_learned_conditioning(batch_size * [""])
                         if isinstance(prompts, tuple):
                             prompts = list(prompts)
+                        prompts = process_prompts(prompts)
                         c = diff_model.get_learned_conditioning(prompts)
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                         samples_ddim, intermediates = sampler.sample(S=opt.ddim_steps,
@@ -317,37 +355,37 @@ def main():
                         rough_rec = rough_rec.repeat(1, 3, 1, 1)
                         metal_rec = metal_rec.repeat(1, 3, 1, 1)
                         if not opt.skip_save:
-                            for i, x_sample in enumerate(x_samples_ddim):
-                                x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                            for j in range(x_samples_ddim.shape[0]):
+                                x_sample = 255. * rearrange(x_samples_ddim[j].cpu().numpy(), 'c h w -> h w c')
+                                x_sample_dir = os.path.join(sample_path, f"{base_count}")
+                                os.makedirs(x_sample_dir)
+                                txt_path = os.path.join(x_sample_dir, 'text.txt')
+                                with open(txt_path, 'w') as f:
+                                    f.write(prompts[j])
                                 Image.fromarray(x_sample.astype(np.uint8)).save(
-                                    os.path.join(sample_path, f"out_{i}_{prompts[0]}.png"))
-
-                            for i, render in enumerate(render_imgs):
-                                render = 255. * rearrange(render.cpu().numpy(), 'c h w -> h w c')
+                                    os.path.join(x_sample_dir, f"img.jpg"))
+                            
+                                render = 255. * rearrange(render_imgs[j].cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(render.astype(np.uint8)).save(
-                                    os.path.join(sample_path, f"render_{i}_{prompts[0]}.png"))
-
-                            for i, albedo in enumerate(albedo_rec):
-                                albedo = 255. * rearrange(albedo.cpu().numpy(), 'c h w -> h w c')
+                                    os.path.join(x_sample_dir, f"render.jpg"))
+                                
+                                albedo = 255. * rearrange(albedo_rec[j].cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(albedo.astype(np.uint8)).save(
-                                    os.path.join(sample_path, f"albedo_{i}_{prompts[0]}.png"))
+                                    os.path.join(x_sample_dir, f"albedo.jpg"))
 
-                            for i, normal in enumerate(normal_rec):
-                                normal = 255. * rearrange(normal.cpu().numpy(), 'c h w -> h w c')
+                                normal = 255. * rearrange(normal_rec[j].cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(normal.astype(np.uint8)).save(
-                                    os.path.join(sample_path, f"normal_{i}_{prompts[0]}.png"))
+                                    os.path.join(x_sample_dir, f"normal.jpg"))
 
-                            for i, rough in enumerate(rough_rec):
-                                rough = 255. * rearrange(rough.cpu().numpy(), 'c h w -> h w c')
+                                rough = 255. * rearrange(rough_rec[j].cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(rough.astype(np.uint8)).save(
-                                    os.path.join(sample_path, f"rough_{i}_{prompts[0]}.png"))
+                                    os.path.join(x_sample_dir, f"rough.jpg"))
 
-                            for i, metal in enumerate(metal_rec):
-                                metal = 255. * rearrange(metal.cpu().numpy(), 'c h w -> h w c')
+                                metal = 255. * rearrange(metal_rec[j].cpu().numpy(), 'c h w -> h w c')
                                 Image.fromarray(metal.astype(np.uint8)).save(
-                                    os.path.join(sample_path, f"metal_{i}_{prompts[0]}.png"))
-
-                                # base_count += 1
+                                    os.path.join(x_sample_dir, f"metal.jpg"))
+                                base_count += 1
+                                
                         all_samples.append(x_samples_ddim)
                         all_samples.append(render_imgs)
                         all_samples.append(albedo_rec)
@@ -382,7 +420,7 @@ def main():
 
                             # to image
                             grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                            Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'[scale-{opt.scale}]' + prompts[0] + f'[seed-{opt.seed}].png'))
+                            Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, (str(grid_count)) + f'[scale-{opt.scale}]' + prompts[0] + f'[seed-{opt.seed}].png'))
                             grid_count += 1
 
                 toc = time.time()
