@@ -276,7 +276,7 @@ class Text2MaterialImprove(Dataset):
                 #     image = np.zeros(np.array(image).shape, dtype=np.array(image).dtype)
 
                 data.append([name, text, image])
-                # if len(data) > 10:  
+                # if len(data) > 20:  
                 #     break
         return data
     
@@ -349,6 +349,27 @@ class PBRMap(Dataset):
         assert self._dataset_length > 0
         print("Data Num : {} for {}".format(self._dataset_length, mode))
     
+    def _read_pbr(self, input_path, gt_paths: list)->dict:
+        input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
+        input = np.array(input)
+        
+        color = Image.open(gt_paths['albedo'])
+        color = np.asarray(color.convert("RGB"))
+
+        normal = Image.open(gt_paths['normal'])
+        normal = np.asarray(normal.convert("RGB"))
+        
+        roughness = Image.open(gt_paths['roughness'])
+        roughness = np.asarray(roughness.convert("RGB"))
+        roughness = roughness.mean(axis=-1, keepdims=True).astype(np.uint8)
+        
+        metalness = (np.zeros((512, 512, 1)) * 255.0).astype(np.uint8)
+        if os.path.exists(gt_paths['metalness']):
+            metalness = Image.open(gt_paths['metalness'])
+            metalness = np.asarray(metalness.convert("RGB"))
+        metalness = metalness.mean(axis=-1, keepdims=True).astype(np.uint8)
+        return input, color, normal, roughness, metalness
+    
     def _preprocess(self) -> list:
         data = []
         pre_len = 0
@@ -372,13 +393,38 @@ class PBRMap(Dataset):
 
             for i, name in enumerate(sample_names):
                 # print(i)
-                # if len(data) > 20:
-                #     break
-                ## images 
-                name_pre = ''
-                name_pre = self.dataset_pre_dict[dataset_name].format(name)
+                if len(data) > 20:
+                    break
                 path_pre = os.path.join(self._data_root_dir, dataset_name, name)
                 gt_paths = {}
+                ## load augmentation data
+                for j in range(3):
+                    num_dir = os.path.join(path_pre, str(j))
+                    if not os.path.exists(num_dir):
+                        break
+                    idxes = os.listdir(num_dir)
+                    for idx in idxes:
+                        img_dir = os.path.join(num_dir, idx)
+                        input_path = os.path.join(img_dir, 'render_512.jpg')
+                        if not os.path.exists(input_path):
+                            continue
+                        gt_paths['albedo'] = os.path.join(img_dir, 'color.jpg')
+                        if not os.path.exists(gt_paths['albedo']):
+                            continue
+                        gt_paths['normal'] = os.path.join(img_dir, 'normal.jpg')
+                        if not os.path.exists(gt_paths['normal']):
+                            continue
+                        gt_paths['roughness'] = os.path.join(img_dir, 'rough.jpg')
+                        if not os.path.exists(gt_paths['roughness']):
+                            continue
+                        gt_paths['metalness'] = os.path.join(img_dir, 'metal.jpg')
+                        input, color, normal, roughness, metalness = self._read_pbr(input_path, gt_paths)
+                        gt = np.concatenate([color, normal, roughness, metalness], axis=-1)
+                        data.append([input, gt])
+                        
+                ## load original images 
+                name_pre = ''
+                name_pre = self.dataset_pre_dict[dataset_name].format(name)
                 gt_paths['albedo'] = os.path.join(path_pre, name_pre + gt_postfix[0])
                 gt_paths['normal'] = os.path.join(path_pre, name_pre + gt_postfix[1])
                 gt_paths['roughness'] = os.path.join(path_pre, name_pre + gt_postfix[2])
@@ -397,32 +443,12 @@ class PBRMap(Dataset):
                 if not isValid:
                     continue
                 
-                input = Image.open(input_path).convert("RGB")  # PIL.Image，h w c
-                input = np.array(input)
-                
-                gts = {}
-                color = Image.open(gt_paths['albedo'])
-                color = np.asarray(color.convert("RGB"))
-                gts['albedo'] = color
-
-                normal = Image.open(gt_paths['normal'])
-                normal = np.asarray(normal.convert("RGB"))
-                gts['normal'] = normal
-                
-                roughness = Image.open(gt_paths['roughness'])
-                roughness = np.asarray(roughness.convert("RGB"))
-                gts['roughness'] = roughness.mean(axis=-1, keepdims=True).astype(np.uint8)
-                
-                metalness = (np.zeros((512, 512, 1)) * 255.0).astype(np.uint8)
-                if os.path.exists(gt_paths['metalness']):
-                    metalness = Image.open(gt_paths['metalness'])
-                    metalness = np.asarray(metalness.convert("RGB"))
-                gts['metalness'] = metalness.mean(axis=-1, keepdims=True).astype(np.uint8)
+                input, color, normal, roughness, metalness = self._read_pbr(input_path, gt_paths)
                 ## check img shapes and value
                 # for k, v in gts.items():
                 #     print(k, '\t', np.min(v), np.max(v), v.dtype)
                 # assert 0
-                gt = np.concatenate([gts['albedo'], gts['normal'], gts["roughness"], gts["metalness"]], axis=-1)
+                gt = np.concatenate([color, normal, roughness, metalness], axis=-1)
                 # img = Image.open(path).convert("RGB")
                 #     img = img.resize((512, 512))
                 #     gt.append(img)
