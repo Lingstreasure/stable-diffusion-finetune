@@ -40,7 +40,7 @@ def load_model_from_config(config, ckpt, model_type="diffusion", verbose=False):
         print("unexpected keys:")
         print(u)
 
-    model.cuda()
+    # model.cuda()
     model.eval()
     return model
 
@@ -92,6 +92,14 @@ def main():
         default="a painting of a virus monster playing guitar",
         help="the prompt to render"
     )
+    
+    parser.add_argument(
+        "--negative_prompt",
+        type=str,
+        nargs="?",
+        default="",
+        help="the prompt not to be render"
+    )
 
     parser.add_argument(
         "--outdir",
@@ -135,7 +143,6 @@ def main():
         action='store_true',
         help="if enabled, uses the same starting code across all samples ",
     )
-
     parser.add_argument(
         "--ddim_eta",
         type=float,
@@ -242,7 +249,7 @@ def main():
         type=str,
         help="evaluate at this precision",
         choices=["full", "autocast"],
-        default="autocast"
+        default="full"
     )
     opt = parser.parse_args()
     seed_everything(opt.seed)
@@ -299,7 +306,7 @@ def main():
                         uc = None
                         all_samples = list()
                         if opt.scale != 1.0:
-                            uc = diff_model.get_learned_conditioning(batch_size * [""])
+                            uc = diff_model.get_learned_conditioning(batch_size * [opt.negative_prompt])
                         if isinstance(prompts, tuple):
                             prompts = list(prompts)
                         prompts = process_prompts(prompts)
