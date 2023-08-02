@@ -201,8 +201,8 @@ class Text2MaterialImprove(Dataset):
     
     def _preprocess(self) -> list:
         data = []
-        num2English = {1:'one', 2:'two', 3:'three', 4:'four', 5:'five', 6:'six',
-                   7:'seven', 8:'eight', 9:'nine', 10:'ten', 11:'eleven', 12:'twelve'}
+        # num2English = {1:'one', 2:'two', 3:'three', 4:'four', 5:'five', 6:'six',
+        #            7:'seven', 8:'eight', 9:'nine', 10:'ten', 11:'eleven', 12:'twelve'}
         for dataset_name in self._dataset_names:
             data_list_file_path = os.path.join(self._data_list_file_dir, dataset_name + '_' + self._mode + '.txt')
             sample_names = []
@@ -256,10 +256,10 @@ class Text2MaterialImprove(Dataset):
                         # else:
                         #     keys[grid_idx] = 'formation' + ',' if keys[grid_idx].endswith(',') else ''
                         # keys[r_c_idx] = 'grid'
-                    elif pat_idx > arr_idx:  ## change 'pattern' to 'formation'
-                        keys[pat_idx] = "formation"
-                    elif pat2_idx > arr_idx:
-                        keys[pat2_idx] = "formation,"
+                    # elif pat_idx > arr_idx:  ## change 'pattern' to 'formation'
+                    #     keys[pat_idx] = "formation"
+                    # elif pat2_idx > arr_idx:
+                    #     keys[pat2_idx] = "formation,"
                     
                     text = ' '.join(keys)
                     # print(text)
@@ -282,7 +282,7 @@ class Text2MaterialImprove(Dataset):
     
     def _set_transforms(self, img_transforms: list = []) -> transforms:
         img_transforms = [instantiate_from_config(tt) for tt in img_transforms]
-        img_transforms.extend([transforms.ToTensor(),   # row_data->(0, 1.0), h w c -> c h w
+        img_transforms.extend([transforms.ToTensor(),   # raw_data->(0, 1.0), h w c -> c h w
                             #    transforms.Lambda(lambda x: rearrange(x * 2. - 1., 'c h w -> h w c')), used for stable-diffusion
                                transforms.Lambda(lambda x: x * 2. - 1.)])  # (0, 1.0)->(-1.0, 1.0)
         img_transforms = transforms.Compose(img_transforms)
